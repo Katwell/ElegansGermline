@@ -62,7 +62,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "LeaderCellBoundaryCondition.hpp"
 #include "RepulsionForceSizeCorrected.hpp"
 #include "RepulsionForce.hpp"
-#include "StatechartCellCycleModelSerializable.hpp"
+#include "StatechartCellCycleModel.hpp"
 #include "FixedDurationGenerationBasedCellCycleModel.hpp"
 #include "GonadArmDataOutput.hpp"
 #include "CellTrackingOutput.hpp"
