@@ -183,6 +183,7 @@ void GonadArmDataOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
     *OutputPositionFile << SimulationTime::Instance()->GetTime() << "\t" << gonadLength << "\t" << cellCycleDuration << "\t" << spermCount << "\t" <<
         prolifCount << "\t" << deathRate << "\t" << totalCells << "\t" << lastProliferativeCell << "\t" << firstMeioticCell << "\t" <<
             G1count << "\t" << Scount << "\t" << G2count << "\t" << Mcount << "\t" << MeioticS << "\t" << firstMeioticRow << "\t" << lastMitoticRow  << "\n";
+    OutputPositionFile->flush();
   }
 }
 

@@ -71,9 +71,10 @@ void CellTrackingOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
         *OutputFile << SimulationTime::Instance()->GetTime() << "\t" << id << "\t" <<  location[0] << "\t" <<  location[1] << "\t" <<  location[2] << "\n";
       }
     }
-  }
+   
+  OutputFile->flush();
 
-  
+  }
 
   if(SimulationTime::Instance()->IsFinished()){
     //Close output file

@@ -234,6 +234,12 @@ void LeaderCellBoundaryCondition<DIM>::ImposeBoundaryCondition(const std::map<No
               *(cell_location - closestPointOnPath);
           }
 
+          if(pLeaderCell->getPathPointTypes()[closestPointIndex]==0){
+            cell_iter->GetCellData()->SetItem("InProximalArm", 1.0);
+          }else{
+            cell_iter->GetCellData()->SetItem("InProximalArm", 0.0);
+          }
+
         }
 
         //Record new closest point on midline path, for memoization purposes

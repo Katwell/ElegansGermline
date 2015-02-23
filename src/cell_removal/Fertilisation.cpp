@@ -93,7 +93,6 @@ void Fertilisation<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
             //Loop over all cells and only consider mature oocytes in the spermatheca 
             if (cell_iter->GetCellData()->GetItem("Differentiation_Oocyte") == 1.0 
                 && gonadLength - cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC") <= mSpermathecaLength 
-                && cell_iter->GetCellData()->GetItem("Radius") > 11.0 
                 && cell_iter->HasApoptosisBegun() == false
                 && stop==false){
 

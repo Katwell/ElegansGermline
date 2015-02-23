@@ -30,11 +30,11 @@ double GetG2Duration(CellPtr pCell){
 //Setters for cell cycle model
 void SetCellCyclePhase(CellPtr pCell, CellCyclePhase_ phase){
     AbstractCellCycleModel* model = pCell->GetCellCycleModel();
-    dynamic_cast<StatechartCellCycleModel*>(model)->SetCellCyclePhase(phase);
+    dynamic_cast<AbstractStatechartCellCycleModel*>(model)->SetCellCyclePhase(phase);
 }
 void SetReadyToDivide(CellPtr pCell, bool Ready){
     AbstractCellCycleModel* model = pCell->GetCellCycleModel();
-    dynamic_cast<StatechartCellCycleModel*>(model)->SetReadyToDivide(Ready);
+    dynamic_cast<AbstractStatechartCellCycleModel*>(model)->SetReadyToDivide(Ready);
 };
 
 //Misc
@@ -65,16 +65,17 @@ double GetMaxRadius(CellPtr pCell){
 
 void UpdateRadiusOocyte(CellPtr pCell){
   double MaxRad = GetMaxRadius(pCell);
+  //double Dist = GetDistanceFromDTC(pCell);
   double Rad = pCell->GetCellData()->GetItem("Radius");
   if(Rad<(MaxRad-0.05)){
     SetRadius(pCell,Rad+=GetTimestep()*GlobalParameterStruct::Instance()->GetParameter(11)); //1 micron per hour
   }
 };
-void UpdateRadiusLateMeiotic(CellPtr pCell){
+void UpdateRadiusMeiotic(CellPtr pCell){
   double MaxRad = GetMaxRadius(pCell);
   double Rad = pCell->GetCellData()->GetItem("Radius");
   if(Rad<fmin(MaxRad-0.05,4)){
-    SetRadius(pCell,Rad+=GetTimestep()*GlobalParameterStruct::Instance()->GetParameter(12));  //0.5 micron per hour
+    SetRadius(pCell,Rad+=GetTimestep()*GlobalParameterStruct::Instance()->GetParameter(10));  //1.0 micron per hour
   }
 };
 #endif

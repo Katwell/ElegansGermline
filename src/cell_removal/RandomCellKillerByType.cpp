@@ -64,8 +64,6 @@ void RandomCellKillerByType<DIM>::CheckAndLabelSingleCellForApoptosis(CellPtr pC
 template<unsigned DIM>
 void RandomCellKillerByType<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
 {
-  if (SimulationTime::Instance()->GetTime() > 17){
-
     for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = this->mpCellPopulation->Begin();
       cell_iter != this->mpCellPopulation->End();
       ++cell_iter)
@@ -79,8 +77,6 @@ void RandomCellKillerByType<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
         }
       }
     }
-
-  }
 }
 
 

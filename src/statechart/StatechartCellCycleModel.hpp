@@ -47,7 +47,16 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //At the moment, the statechart model used is changed by altering THIS HEADER.
 //TODO: Write an abstract Statechart model class and template this class on an abstract Statechart model
-#include "SpatialThresholdDTCSignalStatechart.hpp"
+//#include "FateUncoupledFromCycle.hpp"
+#include "AbstractStatechartCellCycleModel.hpp"
+
+#include <boost/statechart/event.hpp>
+namespace sc = boost::statechart;
+struct EvCheckCellData :  sc::event< EvCheckCellData > {};
+struct EvGoToCellCycle_Mitosis_M : sc::event< EvGoToCellCycle_Mitosis_M > {};
+struct EvGoToCellCycle_Mitosis_S : sc::event< EvGoToCellCycle_Mitosis_S > {};
+struct EvGoToCellCycle_Mitosis_G2 : sc::event< EvGoToCellCycle_Mitosis_G2 > {};
+struct EvGoToCellCycle_Mitosis_G1 : sc::event< EvGoToCellCycle_Mitosis_G1 > {};
 
 
 /*This class is a wrapper that goes around a statechart model of cell behaviour. 
@@ -62,7 +71,8 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 * variables are stored in an array. 
 */
 
-class StatechartCellCycleModel : public AbstractCellCycleModel
+template<typename CellStatechart>
+class StatechartCellCycleModel : public AbstractCellCycleModel, public AbstractStatechartCellCycleModel
 {
 
 /** Standard serialization block, this doesn't deal with archiving the statechart. */
@@ -84,7 +94,7 @@ public:
     //Associated with archiving a statechart
     bool mLoadingFromArchive;               
     std::vector<double> TempVariableStorage;
-    std::bitset<100> TempStateStorage;
+    std::bitset<32> TempStateStorage;
 
     /*Constructor. This:
     * 1) Makes a new AbstractCellCycleModel
@@ -124,8 +134,7 @@ public:
     //M after division because the statechart will handle that.
     void ResetForDivision();    
     
-    //Two new setter methods - these expose two protected variables of AbstractCellCycleModel to the statechart:
-    //the Phase- and ReadyToDivide flags; otherwise it can't set them.
+
     void SetCellCyclePhase(CellCyclePhase_ Phase);
     void SetReadyToDivide(bool Ready);      
 
@@ -150,9 +159,7 @@ public:
 
 
 
-#include "SerializationExportWrapper.hpp"
-// Declare identifier for the serializer
-CHASTE_CLASS_EXPORT(StatechartCellCycleModel)
+
 
 
 //ARCHIVING METHODS FOR STATECHART
@@ -162,13 +169,13 @@ namespace serialization
 {
 
     //Fetch state encoding and variable array from chart and put in archive
-    template<class Archive>
+    template<class Archive, typename CellStatechart>
     inline void save_construct_data(
-        Archive & ar, const StatechartCellCycleModel* t, const BOOST_PFTO unsigned int file_version)
+        Archive & ar, const StatechartCellCycleModel<CellStatechart>* t, const BOOST_PFTO unsigned int file_version)
     {
 
         // Archive other member variables
-        std::bitset<100> state = t->pStatechart->GetState();
+        std::bitset<32> state = t->pStatechart->GetState();
         ar << state;
         std::vector<double> v = t->pStatechart->GetVariables();
         int numberOfVars=v.size();
@@ -178,12 +185,12 @@ namespace serialization
         }
     }
     
-    template<class Archive>
+    template<class Archive, typename CellStatechart>
     inline void load_construct_data(
-        Archive & ar, StatechartCellCycleModel* t, const unsigned int file_version)
+        Archive & ar, StatechartCellCycleModel<CellStatechart>* t, const unsigned int file_version)
     {
     
-        std::bitset<100> state;
+        std::bitset<32> state;
         ar >> state;
         int numberOfVars;
         ar >> numberOfVars;
@@ -195,12 +202,14 @@ namespace serialization
         }
 
         // Construct a new cell cycle model and set the statechart's state and variable values.
-        ::new(t)StatechartCellCycleModel(true);
+        ::new(t)StatechartCellCycleModel<CellStatechart>(true);
         t->TempStateStorage=state;
         t->TempVariableStorage=v;
     }
 }
 } // namespace ...
+
+#include "StatechartCellCycleModel.cpp.inc"
 
 
 #endif  /*STATECHARTCELLCYCLEMODEL_HPP_*/
