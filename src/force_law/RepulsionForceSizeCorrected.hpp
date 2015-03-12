@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -38,19 +38,16 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "GeneralisedLinearSpringForce.hpp"
 #include "NodeBasedCellPopulation.hpp"
-#include "GlobalParameterStruct.hpp"
 
 /**
-* A simple two-body repulsion force law. Designed for use in node-based simulations
+* A two-body repulsion force law, designed for use in node-based simulations.
+* Creates a repulsion between pairs of cells that overlap. 
 *
-* Creates a linear repulsive force between cells
-* with a nonlinear separation less than 2. This force does not
-* take a cell's age or cell cycle phase into account.
-*
-* This is a modification of the GeneralisedLinearSpringForce, where the THE FORCE EXPERIENCED BY A CELL
-* IS DIVIDED BY ITS CROSS SECTIONAL AREA to account for the differing drag force experienced
-* by cells of different sizes.
+* This is a modification of the GeneralisedLinearSpringForce class. The main change is that the force 
+* experienced by a cell is scaled linearly downward proportional to its radius, to account for the 
+* different drag forces experienced by cells of different sizes.
 */
+
 template<unsigned DIM>
 class RepulsionForceSizeCorrected : public GeneralisedLinearSpringForce<DIM>
 {
@@ -86,14 +83,13 @@ public :
 
     /**
      * Outputs force Parameters to file
-     *
-     * As this method is pure virtual, it must be overridden
-     * in subclasses.
+     * Nothing to add here over and above the parameters that exist in the parent class.
      *
      * @param rParamsFile the file stream to which the parameters are output
      */
     virtual void OutputForceParameters(out_stream& rParamsFile);
 };
+
 
 #include "SerializationExportWrapper.hpp"
 EXPORT_TEMPLATE_CLASS_SAME_DIMS(RepulsionForceSizeCorrected)

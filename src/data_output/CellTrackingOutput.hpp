@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -36,19 +36,18 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef CELLTRACKINGOUTPUT_HPP_
 #define CELLTRACKINGOUTPUT_HPP_
 
-#include "ChasteSerialization.hpp"
+#include "AbstractCellBasedSimulationModifier.hpp"
 #include "OutputFileHandler.hpp"
+
+#include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/string.hpp>
 
-#include "AbstractCellBasedSimulationModifier.hpp"
-
 
 /**
- * An modifier class which every n simulation timesteps,
- * saves to a file the number of cells in M-phase at various distances from the DTC.
- * Provides data suitable for calculating the mitotic index.
+ * A modifier that every (samplingInterval) timesteps saves to a file the position of every (cellIdInterval)-th cell
  */
+
 template<unsigned DIM>
 class CellTrackingOutput : public AbstractCellBasedSimulationModifier<DIM,DIM>
 {
@@ -60,11 +59,19 @@ class CellTrackingOutput : public AbstractCellBasedSimulationModifier<DIM,DIM>
         archive & boost::serialization::base_object<AbstractCellBasedSimulationModifier<DIM,DIM> >(*this);
     }
 
-public:
+private:
 
+    //Output file stream
     out_stream OutputFile;
-    int interval;
-    int idInterval;
+    
+    //Number of timesteps between position measurements
+    int mSamplingInterval;
+    
+    //How many cells to track (every idInterval-th cell is followed. E.g. for idInterval=5 every 5th cell is tracked)
+    int mCellIdInterval;
+
+
+public:
 
     /**
      * Default constructor.
@@ -76,30 +83,41 @@ public:
      */
     virtual ~CellTrackingOutput();
 
+
+    /*
+    * Getters for the private member variables
+    */
+    int GetSamplingInterval() const;
+    int GetCellIdInterval() const;
+
+
+    /**
+     * Overriden SetupSolve method
+     * Specifies what to do before the start of the simulation. In this case, open an output file.
+     *
+     * @param rCellPopulation reference to the cell population
+     * @param outputDirectory the output directory, relative to where Chaste output is stored
+     */
+    void SetupSolve(AbstractCellPopulation<DIM,DIM>& rCellPopulation, std::string outputDirectory);
+
+
     /**
      * Overriden UpdateAtEndOfTimeStep method
-     *
-     * Specifies what to do in the simulation at the end of each timestep.
+     * Specifies what to do at the end of each timestep (i.e. check if data output is required,
+     * and if it is, save positions to file).
      *
      * @param rCellPopulation reference to the cell population
      */
      void UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,DIM>& rCellPopulation);
 
-    /**
-     * Overriden SetupSolve method
-     *
-     * Specifies what to do in the simulation before the start of the time loop.
-     *
-     * @param rCellPopulation reference to the cell population
-     * @param outputDirectory the output directory, relative to where Chaste output is stored
-     */
-     void SetupSolve(AbstractCellPopulation<DIM,DIM>& rCellPopulation, std::string outputDirectory);
 
 
      //Output any associated parameters
      void OutputSimulationModifierParameters(out_stream& rParamsFile);
 
 };
+
+
 
 #include "SerializationExportWrapper.hpp"
 EXPORT_TEMPLATE_CLASS_SAME_DIMS(CellTrackingOutput)
@@ -118,10 +136,11 @@ namespace boost
             Archive & ar, const CellTrackingOutput<DIM> * t, const BOOST_PFTO unsigned int file_version)
         {
             // Save data required to construct instance
-            int in = t->interval;
-            ar << in;
-            int cellIdInterval = t->idInterval;
-            ar << cellIdInterval;
+            int interval = t->GetSamplingInterval();
+            ar << interval;
+
+            int idInterval = t->GetCellIdInterval();
+            ar << idInterval;
         }
 
         /**
@@ -132,13 +151,14 @@ namespace boost
             Archive & ar, CellTrackingOutput<DIM> * t, const unsigned int file_version)
         {
             // Retrieve data from archive required to construct new instance
-            int in;
-            ar >> in;
-            int cellIdInterval;
-            ar >> cellIdInterval;
+            int interval;
+            ar >> interval;
+
+            int idInterval;
+            ar >> idInterval;
 
             // Invoke inplace constructor to initialise instance
-            ::new(t)CellTrackingOutput<DIM>(in, cellIdInterval);
+            ::new(t)CellTrackingOutput<DIM>(interval, idInterval);
         }
     }
 } // namespace ...

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -43,11 +43,11 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "AbstractCellBasedSimulationModifier.hpp"
 
 /**
-* An example of a simulation modifier that updates the position of a leader cell each time step. This class is: 
+* An example of a simulation modifier that updates the position of a leader cell at each time step. This class is: 
 * 1) Designed to work with a 3D node based cell population only.
 * 2) The leader cell is taken to be the first node in the population, with ID=0.
-* This modifier is designed to be used together with a LeaderCellBoundaryCondition, to produce a tubular boundary 
-* condition enforced allong the path of the moving leader cell.
+* This modifier can be used together with a LeaderCellBoundaryCondition, to produce a tubular boundary 
+* condition enforced allong the path of the moving cell.
 *
 * This particular modifier is C. elegans germline specific, reflecting the motion of the Distal Tip Cell during 
 * gonad development. To model other leader cells, it is recommended to create a new class inheriting from 
@@ -68,36 +68,39 @@ private:
         archive & boost::serialization::base_object<AbstractCellBasedSimulationModifier<DIM, DIM> >(*this);
     }
 
-    /* C. elegans specific variables: */
+    /* Some C. elegans specific variables: */
     bool   Unc5;                    //The gene that is switched on when the DTC starts to turn
     bool   Vab3;                    //The gene that is switched on when the DTC halts
-    bool   TurnComplete;            //True when the DTC has reached the middle of the dorsal surface
-    double TimeSinceLastUpdate;     //Used in proximal arm stretching to determine when new midline points must be inserted.
+    bool   TurnComplete;            //Set to true when the DTC has reached the middle of the dorsal surface
+    double TimeSinceLastUpdate;     //Used in proximal arm stretching to determine when new midline points should be inserted.
     double WormBodyRadius;          //The radius of the gonad turn
+    double StretchingRate;          //Rate of growth by stretching during the L4  
 
-
-    //More general leader cell variables
+    //More generally applicable leader cell variables
     std::vector< c_vector<double, DIM> > PathPointCollection;  //Stores equally spaced points on the leader cell's path
-    std::vector< int > PathPointTypes;                         //Flag associated with each point, for additional info
+    std::vector< int > PathPointTypes;                         //A flag associated with each point, for additional info
     c_vector < double, DIM > CurrentLocation;                  //Current leader cell position           
     double Spacing;                                            //Separation of points on path
-    double StretchingRate;                                     //Rate of growth by stretching during the L4   
+     
 
 public:
 
     /**
     * Constructor. Takes in an initial collection of path points, and their types (flags that give associated info,
     * such as whether the points form part of a straight or a turn).
-    * @param StartingPointLocations initial collection of points on leader cell path
-    * @param StartingPointTypes initial collection of flags for each of those points
-    * @param spacing distance between consecutive points on leader cell path
     * @param UncInitial initial value of Unc5, determines whether DTC has started turn yet
     * @param VabInitial initial value of Vab3, switches on as the DTC halts
+    * @param StartingPointLocations initial collection of points on leader cell path
+    * @param StartingPointTypes initial collection of flags for each of those points
+    * @param currentLocation = current DTC position
+    * @param spacing distance between consecutive points on leader cell path
     */
-    DTCMovementModel(std::vector< c_vector<double, DIM> > StartingPointLocations,
-        std::vector< int > StartingPointTypes, c_vector<double, DIM> currentLocation,
-        double spacing, bool UncInitial = false,
-        bool VabInitial = false, double TimeSinceUpdate = 0);
+    DTCMovementModel(bool UncInitial, bool VabInitial,
+        double TimeSinceUpdate,
+        std::vector< c_vector<double, DIM> > StartingPointLocations,
+        std::vector< int > StartingPointTypes, 
+        c_vector<double, DIM> currentLocation,
+        double spacing);
 
 
     /**
@@ -127,14 +130,15 @@ public:
     void SetupSolve(AbstractCellPopulation<DIM, DIM>& rCellPopulation, std::string outputDirectory);
 
 
-    //Getters for private members
-    const std::vector< c_vector<double, DIM> > getPathPointCollection() const;  
-    const std::vector< int > getPathPointTypes() const;
-    const c_vector< double, DIM > getCurrentLocation() const;
-    const double getSpacing() const;
-    const double getTimeSinceLastUpdate() const;
-    const bool getUnc5() const;
-    const bool getVab3() const;
+
+    //Getters for private member variables
+    std::vector< c_vector<double, DIM> > getPathPointCollection() const;  
+    std::vector< int > getPathPointTypes() const;
+    c_vector< double, DIM > getCurrentLocation() const;
+    double getSpacing() const;
+    double getTimeSinceLastUpdate() const;
+    bool getUnc5() const;
+    bool getVab3() const;
 
 
     /**
@@ -164,20 +168,20 @@ namespace boost
             Archive & ar, const DTCMovementModel<DIM>* t, const BOOST_PFTO unsigned int file_version)
         {
             // Save data required to construct an instance
-            const std::vector< c_vector<double, DIM> > pathPointCollection = t->getPathPointCollection();
+            std::vector< c_vector<double, DIM> > pathPointCollection = t->getPathPointCollection();
             ar << pathPointCollection;
-            const std::vector< int > pathPointTypes = t->getPathPointTypes();
+            std::vector< int > pathPointTypes = t->getPathPointTypes();
             ar << pathPointTypes;
-            const c_vector<double, DIM> currentLocation = t->getCurrentLocation();
+            c_vector<double, DIM> currentLocation = t->getCurrentLocation();
             ar << currentLocation;
             // Archive other member variables
-            const double sp = t->getSpacing();
+            double sp = t->getSpacing();
             ar << sp;
-            const bool unc5 = t->getUnc5();
+            bool unc5 = t->getUnc5();
             ar << unc5;
-            const bool vab3 = t->getVab3();
+            bool vab3 = t->getVab3();
             ar << vab3;
-            const double timeSinceUpdate = t->getTimeSinceLastUpdate();
+            double timeSinceUpdate = t->getTimeSinceLastUpdate();
             ar << timeSinceUpdate;
         }
 
@@ -206,7 +210,7 @@ namespace boost
             ar >> timeSinceUpdate;
 
             // Invoke inplace constructor to initialise instance
-            ::new(t)DTCMovementModel<DIM>(pathPointCollection, pathPointTypes, currentLocation, sp, unc5, vab3, timeSinceUpdate);
+            ::new(t)DTCMovementModel<DIM>(unc5, vab3, timeSinceUpdate, pathPointCollection, pathPointTypes, currentLocation, sp);
         }
     }
 } // namespace ...

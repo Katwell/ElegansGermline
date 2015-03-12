@@ -1,26 +1,66 @@
+/*
+
+Copyright (c) 2005-2015, University of Oxford.
+All rights reserved.
+
+University of Oxford means the Chancellor, Masters and Scholars of the
+University of Oxford, having an administrative office at Wellington
+Square, Oxford OX1 2JD, UK.
+
+This file is part of Chaste.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+* Neither the name of the University of Oxford nor the names of its
+contributors may be used to endorse or promote products derived from this
+software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
 #include <StatechartInterface.hpp>
 #include <FateDecisionCoupledToCycle.hpp>
 
 //--------------------STATECHART FUNCTIONS------------------------------
 
-//HARDCODED + RARELY ALTERED DETAILS
+//HARDCODED, RARELY ALTERED DETAILS
 double stochasticity         = 0.1;
 bool   contactInhibitionInG1 = false;
 bool   contactInhibitionInG2 = true;
 
-FateDecisionCoupledToCycle::FateDecisionCoupledToCycle(){
+
+FateDecisionCoupledToCycle::FateDecisionCoupledToCycle(){        
+        //null the cell
         pCell=boost::shared_ptr<Cell>(); 
+        
         //Set default value of all state associated variables
         TimeInPhase=0;
         SpermatocyteDivisions=0;
         SpermDevelopmentDelay=0;
 };
 
+
 //Set associated cell
 void FateDecisionCoupledToCycle::SetCell(CellPtr newCell){
      assert(newCell!=NULL);
      pCell=newCell;
 };
+
 
 //Get a vector containing all state associated variables
 std::vector<double> FateDecisionCoupledToCycle::GetVariables(){
@@ -31,6 +71,7 @@ std::vector<double> FateDecisionCoupledToCycle::GetVariables(){
     return variables;
 }
 
+
 //Set values of all state associated variables from an input vector
 void FateDecisionCoupledToCycle::SetVariables(std::vector<double> variables){
     TimeInPhase=variables.at(0);
@@ -38,77 +79,79 @@ void FateDecisionCoupledToCycle::SetVariables(std::vector<double> variables){
     SpermDevelopmentDelay=variables.at(2);
 }
 
+
 //Get an encoding of the current state in bitset form
-std::bitset<32> FateDecisionCoupledToCycle::GetState(){
-  std::bitset<32> state;
- if(state_cast<const GLP1_Unbound*>()!=0){ 
-     state.set(1,1);
- }
- if(state_cast<const GLP1_Bound*>()!=0){ 
-     state.set(2,1);
- }
- if(state_cast<const GLP1_Absent*>()!=0){ 
-     state.set(3,1);
- }
- if(state_cast<const LAG1_Inactive*>()!=0){ 
-     state.set(4,1);
- }
- if(state_cast<const LAG1_Active*>()!=0){ 
-     state.set(5,1);
- }
- if(state_cast<const GLD1_Inactive*>()!=0){ 
-     state.set(6,1);
- }
- if(state_cast<const GLD1_Active*>()!=0){ 
-     state.set(7,1);
- }
- if(state_cast<const GLD2_Inactive*>()!=0){ 
-     state.set(8,1);
- }
- if(state_cast<const GLD2_Active*>()!=0){ 
-     state.set(9,1);
- }
- if(state_cast<const CellCycle_Mitosis_G1*>()!=0){ 
-     state.set(10,1);
- }
- if(state_cast<const CellCycle_Mitosis_S*>()!=0){ 
-     state.set(11,1);
- }
- if(state_cast<const CellCycle_Mitosis_G2*>()!=0){ 
-     state.set(12,1);
- }
- if(state_cast<const CellCycle_Mitosis_M*>()!=0){ 
-     state.set(13,1);
- }
- if(state_cast<const CellCycle_ExitedProlif_G1*>()!=0){ 
-     state.set(14,1);
- }
- if(state_cast<const CellCycle_ExitedProlif_MeioticS*>()!=0){ 
-     state.set(15,1);
- }
- if(state_cast<const CellCycle_ExitedProlif_Meiosis*>()!=0){ 
-     state.set(16,1);
- }
- if(state_cast<const Differentiation_Precursor*>()!=0){ 
-     state.set(17,1);
- }
- if(state_cast<const Differentiation_SpermFated*>()!=0){ 
-     state.set(18,1);
- }
- if(state_cast<const Differentiation_OocyteFated*>()!=0){ 
-     state.set(19,1);
- }
- if(state_cast<const Differentiation_Sperm*>()!=0){ 
-     state.set(20,1);
- }
- if(state_cast<const Differentiation_Oocyte*>()!=0){ 
-     state.set(21,1);
- }
+std::bitset<MAX_STATE_COUNT> FateDecisionCoupledToCycle::GetState(){ 
+    
+    std::bitset<MAX_STATE_COUNT> state;
+    if(state_cast<const GLP1_Unbound*>()!=0){ 
+        state.set(1,1);
+    }
+    if(state_cast<const GLP1_Bound*>()!=0){ 
+        state.set(2,1);
+    }
+    if(state_cast<const GLP1_Absent*>()!=0){ 
+        state.set(3,1);
+    }
+    if(state_cast<const LAG1_Inactive*>()!=0){ 
+        state.set(4,1);
+    }
+    if(state_cast<const LAG1_Active*>()!=0){ 
+        state.set(5,1);
+    }
+    if(state_cast<const GLD1_Inactive*>()!=0){ 
+        state.set(6,1);
+    }
+    if(state_cast<const GLD1_Active*>()!=0){ 
+        state.set(7,1);
+    }
+    if(state_cast<const GLD2_Inactive*>()!=0){ 
+        state.set(8,1);
+    }
+    if(state_cast<const GLD2_Active*>()!=0){ 
+        state.set(9,1);
+    }
+    if(state_cast<const CellCycle_Mitosis_G1*>()!=0){ 
+        state.set(10,1);
+    }
+    if(state_cast<const CellCycle_Mitosis_S*>()!=0){ 
+        state.set(11,1);
+    }
+    if(state_cast<const CellCycle_Mitosis_G2*>()!=0){ 
+        state.set(12,1);
+    }
+    if(state_cast<const CellCycle_Mitosis_M*>()!=0){ 
+        state.set(13,1);
+    }
+    if(state_cast<const CellCycle_ExitedProlif_G1*>()!=0){ 
+        state.set(14,1);
+    }
+    if(state_cast<const CellCycle_ExitedProlif_MeioticS*>()!=0){ 
+        state.set(15,1);
+    }
+    if(state_cast<const CellCycle_ExitedProlif_Meiosis*>()!=0){ 
+        state.set(16,1);
+    }
+    if(state_cast<const Differentiation_Precursor*>()!=0){ 
+        state.set(17,1);
+    }
+    if(state_cast<const Differentiation_SpermFated*>()!=0){ 
+        state.set(18,1);
+    }
+    if(state_cast<const Differentiation_OocyteFated*>()!=0){ 
+        state.set(19,1);
+    }
+    if(state_cast<const Differentiation_Sperm*>()!=0){ 
+        state.set(20,1);
+    }
+    if(state_cast<const Differentiation_Oocyte*>()!=0){ 
+        state.set(21,1);
+    }
  return state;
 }
 
-//Set current state from a bitset vector
-void FateDecisionCoupledToCycle::SetState(std::bitset<32> state){
+//Set current state from a bitset 
+void FateDecisionCoupledToCycle::SetState(std::bitset<MAX_STATE_COUNT> state){
     if(state[1]==1){ 
         process_event(EvGoToGLP1_Unbound());
     }
@@ -174,8 +217,10 @@ void FateDecisionCoupledToCycle::SetState(std::bitset<32> state){
     }
 }
 
-//Copy an existing statechart -----> HERE!!!!!
-boost::shared_ptr<FateDecisionCoupledToCycle> FateDecisionCoupledToCycle::Copy(boost::shared_ptr<FateDecisionCoupledToCycle> myNewStatechart){
+
+//Copy an existing statechart on division
+boost::shared_ptr<FateDecisionCoupledToCycle> FateDecisionCoupledToCycle::CopyInto(boost::shared_ptr<FateDecisionCoupledToCycle> myNewStatechart){
+    
     myNewStatechart->initiate();
     if(state_cast<const GLP1_Unbound*>()!=0){
         myNewStatechart->process_event(EvGoToGLP1_Unbound());
@@ -245,9 +290,9 @@ boost::shared_ptr<FateDecisionCoupledToCycle> FateDecisionCoupledToCycle::Copy(b
     return (myNewStatechart);
 };
 
+
 //--------------------FIRST RESPONDER------------------------------
 //Describes the events that are fired when an update of the chart is called for
-
 sc::result Running::react( const EvCheckCellData & ){
     post_event(EvCellCycleUpdate());
     post_event(EvDifferentiationUpdate());
@@ -259,7 +304,7 @@ sc::result Running::react( const EvCheckCellData & ){
 };
 
 
-//Constructors for empty container states
+//Empty constructors for container states
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 GLP1::GLP1( my_context ctx ):my_base( ctx ){
@@ -294,7 +339,7 @@ Differentiation::Differentiation( my_context ctx ):my_base( ctx ){
 };
 
 
-//Leaf states that actually do something...
+//Leaf states; these actually do something...
 //--------------------------------------------------------------------------
 //---------------------------GLP1_Unbound-----------------------------------
 GLP1_Unbound::GLP1_Unbound( my_context ctx ):my_base( ctx ){};
@@ -650,6 +695,8 @@ sc::result Differentiation_Oocyte::react(const EvDifferentiationUpdate &){
 };
 
 
+// Export StatechartCellCycleModel and ElegansDevStatechartCellCycleModel with this class
+// as template parameter
 #include "SerializationExportWrapperForCpp.hpp"
-// Declare identifier for the serializer
 EXPORT_TEMPLATE_CLASS1(StatechartCellCycleModel, FateDecisionCoupledToCycle)
+EXPORT_TEMPLATE_CLASS1(ElegansDevStatechartCellCycleModel, FateDecisionCoupledToCycle)

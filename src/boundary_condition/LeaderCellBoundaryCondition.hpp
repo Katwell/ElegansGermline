@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -44,7 +44,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <boost/serialization/vector.hpp>
 
 /**
-* A boundary condition, which takes in a pointer to a leader cell modifier. This class ensures
+* A boundary condition that takes in a pointer to a leader cell modifier. This class ensures
 * that cells stay within a certain distance of that leader cell's path.
 */
 
@@ -57,7 +57,6 @@ private:
     friend class boost::serialization::access;
     /**
     * Serialize the object.
-    *
     * @param archive the archive
     * @param version the current version of this class
     */
@@ -112,8 +111,8 @@ public:
 
 
     //Getters for private members
-    const boost::shared_ptr< DTCMovementModel<DIM> > GetLeaderCellModifier() const;
-    const double GetTubeRadius() const;
+    boost::shared_ptr< DTCMovementModel<DIM> > GetLeaderCellModifier() const;
+    double GetTubeRadius() const;
 
 
     /**

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -40,24 +40,26 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cmath>
 #include <vector>
 
+
+//Constructor
 template<unsigned DIM>
-DTCMovementModel<DIM>::DTCMovementModel(std::vector< c_vector<double, DIM> > startingLocations,
-                                              std::vector< int > startingTypes,
-                                              c_vector<double,DIM> currentLocation,
-                                              double spacing,
-                                              bool Unc5Initial,
-                                              bool Vab3Initial,
-                                              double TimeSinceUpdate): 
+DTCMovementModel<DIM>::DTCMovementModel(bool Unc5Initial, 
+                                        bool Vab3Initial,
+                                        double TimeSinceUpdate,
+                                        std::vector< c_vector<double, DIM> > startingLocations,
+                                        std::vector< int > startingTypes,
+                                        c_vector<double,DIM> currentLocation,
+                                        double spacing): 
     AbstractCellBasedSimulationModifier<DIM>(),
+    Unc5(Unc5Initial),
+    Vab3(Vab3Initial),
+    TimeSinceLastUpdate(TimeSinceUpdate),
     PathPointCollection(startingLocations),
     PathPointTypes(startingTypes),
     CurrentLocation(currentLocation),
-    Spacing(spacing),
-    Unc5(Unc5Initial),
-    Vab3(Vab3Initial),
-    TimeSinceLastUpdate(TimeSinceUpdate)
+    Spacing(spacing)
 {   
-    //Get radius of the DTC turn
+    //Get the radius of the DTC turn
     WormBodyRadius = GlobalParameterStruct::Instance()->GetParameter(7);
     TurnComplete = false;
     //Get the rate of stretching parameter
@@ -66,37 +68,45 @@ DTCMovementModel<DIM>::DTCMovementModel(std::vector< c_vector<double, DIM> > sta
 
 
 template<unsigned DIM>
-DTCMovementModel<DIM>::~DTCMovementModel()
-{
-}
+DTCMovementModel<DIM>::~DTCMovementModel(){}
 
 
+
+
+//Updates DTC position at the end of each timestep.
 template<unsigned DIM>
 void DTCMovementModel<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM, DIM>& rCellPopulation)
 {
 
-    //This block updates the states of the genes Vab3 and Unc5 over time; manually for now. 
-    //After a delay, Unc5 switches on and the DTC turns onto the dorsal surface
+    //This block updates the genes Vab3 and Unc5 dependent on time (i.e. worm age). 
+    //After a delay, Unc5 switches on, and the DTC turns onto the dorsal surface
     //After a longer delay, Vab3 switches on and the DTC halts
-    if (SimulationTime::Instance()->GetTime() + 18.5>GlobalParameterStruct::Instance()->GetParameter(6)){
+    if (SimulationTime::Instance()->GetTime() + 18.5 > GlobalParameterStruct::Instance()->GetParameter(6)){
         Vab3 = true;
     }
-    if (SimulationTime::Instance()->GetTime() + 18.5>GlobalParameterStruct::Instance()->GetParameter(8)){
+    if (SimulationTime::Instance()->GetTime() + 18.5 > GlobalParameterStruct::Instance()->GetParameter(8)){
         Unc5 = true;
     }
 
+
     //This block checks whether or not cells are present close enough behind the DTC to push it 
-    bool DTCBeingPushed = false;
-    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
-        cell_iter != rCellPopulation.End(); ++cell_iter){
-        if (cell_iter->GetCellData()->GetItem("IsDTC") == 0.0 &&
-            cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC") < 5){
-            DTCBeingPushed = true;
-            break;
+    bool DTCBeingPushed;
+    if(GlobalParameterStruct::Instance()->GetParameter(37) > 0){ //If DTC halting enabled
+        DTCBeingPushed = false;
+        for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
+            cell_iter != rCellPopulation.End(); ++cell_iter){
+            if (cell_iter->GetCellData()->GetItem("IsDTC") == 0.0 &&            //If there's a germ cell present (not DTC)
+                cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC") < 5){  //within 5 microns, DTC is being pushed.
+                DTCBeingPushed = true;
+                break;
+            }
         }
+    }else{                                //If DTC halting is disabled, DTC can always move regardless
+        DTCBeingPushed = true;
     }
 
-    //Set the current speed of the DTC, based on age of the worm and whether the DTC can move right now
+
+    //Set the current speed of the DTC, based on age of the worm and whether or not the DTC is halted.
     double currentSpeed;
     double currentTime = SimulationTime::Instance()->GetTime();
     if (currentTime < 3.5){
@@ -115,20 +125,24 @@ void DTCMovementModel<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM, DI
         currentSpeed = 0;
     }
 
+
+
     //Work out how fast the DTC angle should be changing in a turn, given DTC migration speed  
     double timestep = SimulationTime::Instance()->GetTimeStep();
     double thetaIncrement = (currentSpeed*timestep) / WormBodyRadius;
     
 
-    //Update the DTC location
-    int pointType;
-    if (currentSpeed > 0){
 
-        if (Unc5 == true){
+    //FINALLY update the DTC's location!
+    int pointType;          //See below.
 
-            //If the turn onto dorsal surface has begun, work out current angle of DTC around worm body
-            //To save time, if the PathPointTypes vector indicates that this has aleady been achieved,
-            //skip the arcsin calculation and just assume a theta of 0.
+    if (currentSpeed > 0){  //If DTC is moving...
+        
+        if (Unc5 == true){  //And the turn is in progress...
+
+            //Work out current angle of DTC around the worm's body
+            //To save time, if the PathPointTypes vector indicates that turning has aleady been achieved,
+            //we skip the arcsin calculation and just assume a theta of 0.
             double theta;
             if (TurnComplete==true){
                 theta = 0;
@@ -167,36 +181,38 @@ void DTCMovementModel<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM, DI
             }
 
         }else{
-            //If the turn hasn't started, DTC moves away from the worm's centre along the ventral side
+            //If the turn hasn't started yet, the DTC moves away from the worm's centre along the ventral side
             CurrentLocation[2] += currentSpeed*timestep;
             pointType = 0;
         }
-        //Update DTC location
+
+        //Update the DTC position in the mechanics simulation
         rCellPopulation.GetNode(0)->rGetModifiableLocation() = CurrentLocation;
     }
 
-    //If the DTC has moved further than the spacing interval, put a new point in the PointCollection
+    //If the DTC has moved further than the spacing interval, add a new point to the PointCollection
     double distanceMoved = norm_2(CurrentLocation - PathPointCollection.back());
+    
     if (distanceMoved > Spacing){
         PathPointCollection.push_back(CurrentLocation);
         PathPointTypes.push_back(pointType);
         if (distanceMoved - Spacing > 0.05){
-            printf("Leader cell is moving quickly, and overshooting the spacing separation by > 0.05. Consider reducting the timestep");
+            printf("The leader cell is moving quickly, and overshooting the spacing separation by > 0.05. Consider reducing the timestep");
         }
     }
 
 
-    //Deals with gonad growth by stretching, during the L4 when the turn has completed
+    //Deals with gonad growth by stretching, during the L4 and after the turn has completed
     if (currentTime > 12.5 && currentTime < 17.0 && PathPointTypes.back() == 2){
 
-        //If enough stretching has happened since the last update, add another point into the collection:
+        //If enough stretching has happened since the last update, add another point into the midline point collection:
         if (TimeSinceLastUpdate > Spacing / StretchingRate){
 
             //Work out which points correspond to two ends of the turn 
             int oneStraightEndIndex;
             int otherStraightEndIndex;
             assert(PathPointTypes.size() == PathPointCollection.size());
-            for (int i = 1; i<PathPointTypes.size(); i++){
+            for (int i = 1; i<(int)PathPointTypes.size(); i++){
                 if (PathPointTypes[i] == 1 && PathPointTypes[i - 1] == 0){
                     oneStraightEndIndex = i - 1;
                 }
@@ -208,19 +224,19 @@ void DTCMovementModel<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM, DI
                 }
             }
 
-            //Work out the locations of the two new points
+            //Work out the locations of the two new required points
             c_vector<double, DIM> newPoint1 = PathPointCollection[oneStraightEndIndex];
             newPoint1[2] += Spacing;
             c_vector<double, DIM> newPoint2 = PathPointCollection[otherStraightEndIndex + 1];
             newPoint2[2] += Spacing;
 
-            //Make space for new points in the collection vectors
+            //Make space for these new points in the collection vectors
             int currentSize = PathPointTypes.size();
             PathPointCollection.resize(currentSize + 2);
             PathPointTypes.resize(currentSize + 2);
 
-            //Update the point collection vectors, adding 2 new points. All of this will be very slow, but it occurs only 
-            //for a short part of the simulation
+            //Update the path point collection vectors, adding the 2 new points. All of this will be very slow, 
+            //but it occurs only for a short part of the simulation
             for (int i = currentSize + 1; i >= 0; i--){
                 if (i>otherStraightEndIndex + 2){
                     PathPointCollection[i] = PathPointCollection[i - 2];
@@ -240,7 +256,7 @@ void DTCMovementModel<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM, DI
                 }
             }
 
-            //Keeps track of how long it's been since a stretching correction was last applied
+        //Keeps track of how long it's been since a stretching correction was last applied
             TimeSinceLastUpdate = 0;
         }
         else{
@@ -250,60 +266,56 @@ void DTCMovementModel<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM, DI
 }
 
 
-//Getters for private members
+//Getters for private member variables
 template<unsigned DIM>
-const std::vector< c_vector<double, DIM> > DTCMovementModel<DIM>::getPathPointCollection() const{
+std::vector< c_vector<double, DIM> > DTCMovementModel<DIM>::getPathPointCollection() const{
     return PathPointCollection;
 }
-
 template<unsigned DIM>
-const std::vector< int > DTCMovementModel<DIM>::getPathPointTypes() const{
+std::vector< int > DTCMovementModel<DIM>::getPathPointTypes() const{
     return PathPointTypes;
 }
-
 template<unsigned DIM>
-const c_vector< double,DIM > DTCMovementModel<DIM>::getCurrentLocation() const{
+c_vector< double,DIM > DTCMovementModel<DIM>::getCurrentLocation() const{
     return CurrentLocation;
 }
-
-
 template<unsigned DIM>
-const double DTCMovementModel<DIM>::getSpacing() const{
+double DTCMovementModel<DIM>::getSpacing() const{
     return Spacing;
 }
-
 template<unsigned DIM>
-const double DTCMovementModel<DIM>::getTimeSinceLastUpdate() const{
+double DTCMovementModel<DIM>::getTimeSinceLastUpdate() const{
     return TimeSinceLastUpdate;
 }
-
 template<unsigned DIM>
-const bool DTCMovementModel<DIM>::getUnc5() const{
+bool DTCMovementModel<DIM>::getUnc5() const{
     return Unc5;
 }
-
 template<unsigned DIM>
-const bool DTCMovementModel<DIM>::getVab3() const{
+bool DTCMovementModel<DIM>::getVab3() const{
     return Vab3;
 }
 
+
+//Nothing to do on setup here...
 template<unsigned DIM>
 void DTCMovementModel<DIM>::SetupSolve(AbstractCellPopulation<DIM, DIM>& rCellPopulation, std::string outputDirectory)
-{
-    // Nothing to do here for now
-}
+{}
 
 
+
+//parameter output. TODO: What else would be good to record here?
 template<unsigned DIM>
 void DTCMovementModel<DIM>::OutputSimulationModifierParameters(out_stream& rParamsFile)
 {
     *rParamsFile << "\t\t\t<Unc5Value>" << getUnc5() << "</Unc5Value>\n";
     *rParamsFile << "\t\t\t<Vab3Value>" << getVab3() << "</Vab3Value>\n";
     *rParamsFile << "\t\t\t<PointOnPathSpacing>" << getSpacing() << "</PointOnPathSpacing>\n";
-
-    // Next, call method on direct parent class
+    //call method on direct parent class
     AbstractCellBasedSimulationModifier<DIM>::OutputSimulationModifierParameters(rParamsFile);
 }
+
+
 
 /////////////////////////////////////////////////////////////////////////////
 // Explicit instantiation

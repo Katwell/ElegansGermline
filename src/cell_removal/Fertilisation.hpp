@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -37,18 +37,17 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FERTILISATION_HPP_
 
 #include "AbstractCellKiller.hpp"
-
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
 
-
 /**
-* A cell killer that loops over all cells in the population and looks for those in the oocyte state. It decides
-* whether they can currently be fertilised, by seeing whether the oocyte is in the spermatheca and
-* whether a sperm cell is also present in the spermatheca. If so, oocyte and sperm are removed.
+* A cell killer that loops over all cells in the population and looks for those in the oocyte 
+* state. It decides whether they can currently be fertilised, by seeing whether the oocyte is 
+* in the spermatheca, and whether a sperm cell is also present in the same region. If so, oocyte 
+* and sperm are removed.
 *
-* This is implemented as a cell killer because both cells involved in fertilisation are removed
-* from the simulation.
+* This is implemented as a cell killer because both cells involved in fertilisation/ovulation 
+* are deleted from the simulation.
 */
 
 template<unsigned DIM>
@@ -56,8 +55,8 @@ class Fertilisation : public AbstractCellKiller<DIM>
 {
 private:
 
-    /**
-    * Length of the spermatheca, used to determine when a sperm and oocyte are in the position to be fertilised
+    /*
+    * Length of the spermatheca; sets how close to the proximal end a cell must be to be fertilised/ovulated
     */
     double mSpermathecaLength;
 
@@ -87,7 +86,9 @@ public:
     Fertilisation(AbstractCellPopulation<DIM>* pCellPopulation, double spermathecaLength);
 
 
-    //Destructor
+    /*
+    * Destructor
+    */
     ~Fertilisation();
 
 
@@ -98,7 +99,7 @@ public:
 
 
     /**
-    * Once a sperm  and oocyte involved in fertilisation have been labelled for death, this
+    * Once a sperm and an oocyte involved in fertilisation have been labelled for death, this
     * function sends the kill signal.
     *
     * @param pCell the cell to be removed
@@ -107,9 +108,10 @@ public:
 
 
     /**
-    * Overridden method to test whether a given oocyte should be fertilised.
-    * Implemented as a cell killer because a sperm cell and an oocyte are removed when fertilisation
-    * occurs.
+    * Overridden method to test whether a given oocyte/sperm is involved in fertilisation.
+    * The cells must be < spermathecaLength away from the proximal end, and both 1 sperm
+    * and one oocyte must be available. Cells involved in fertilisation are removed, representing
+    * subsequent ovulation.
     *
     * @param pCell the oocyte to test for fertilisation
     */
@@ -144,6 +146,7 @@ namespace boost
             // Save data required to construct instance
             const AbstractCellPopulation<DIM>* const p_cell_population = t->GetCellPopulation();
             ar << p_cell_population;
+
             double dist = t->GetSpermathecaLength();
             ar << dist;
         }
@@ -158,6 +161,7 @@ namespace boost
             // Retrieve data from archive required to construct new instance
             AbstractCellPopulation<DIM>* p_cell_population;
             ar >> p_cell_population;
+            
             double dist;
             ar >> dist;
 

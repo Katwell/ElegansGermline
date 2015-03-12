@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -36,32 +36,35 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "RepulsionForceSizeCorrected.hpp"
 #include "IsNan.hpp"
 
+//Constructor
 template<unsigned DIM>
 RepulsionForceSizeCorrected<DIM>::RepulsionForceSizeCorrected()
    : GeneralisedLinearSpringForce<DIM>()
 {
 }
 
+
+/*
+* Overriden AddForceContribution method. Largely the same as GeneralisedLinearSpringForce, except with a
+* cell radius scaling.
+*/
 template<unsigned DIM>
 void RepulsionForceSizeCorrected<DIM>::AddForceContribution(AbstractCellPopulation<DIM>& rCellPopulation)
 {
 
-    //std::cout << SimulationTime::Instance()->GetTime() << "\t" << "Force" << "\t" << time(NULL) << std::endl;
-
-    // Throw an exception message if not using a NodeBasedCellPopulation
+    // Throw an exception if the simulation doesn't use a NodeBasedCellPopulation
     if (dynamic_cast<NodeBasedCellPopulation<DIM>*>(&rCellPopulation) == NULL)
     {
         EXCEPTION("RepulsionForceSizeCorrected is to be used with a NodeBasedCellPopulation only");
     }
 
+    //Loop over pairs of nodes
     std::vector< std::pair<Node<DIM>*, Node<DIM>* > >& r_node_pairs = (static_cast<NodeBasedCellPopulation<DIM>*>(&rCellPopulation))->rGetNodePairs();
-
     for (typename std::vector< std::pair<Node<DIM>*, Node<DIM>* > >::iterator iter = r_node_pairs.begin();
         iter != r_node_pairs.end();
         iter++)
     {
         std::pair<Node<DIM>*, Node<DIM>* > pair = *iter;
-
         Node<DIM>* p_node_a = pair.first;
         Node<DIM>* p_node_b = pair.second;
 
@@ -73,17 +76,17 @@ void RepulsionForceSizeCorrected<DIM>::AddForceContribution(AbstractCellPopulati
         double node_a_radius = p_node_a->GetRadius();
         double node_b_radius = p_node_b->GetRadius();
 
-        // Get the unit vector parallel to the line joining the two nodes
+        // Get the unit vector between the two nodes
         c_vector<double, DIM> unit_difference;
-
         unit_difference = (static_cast<NodeBasedCellPopulation<DIM>*>(&rCellPopulation))->rGetMesh().GetVectorFromAtoB(node_a_location, node_b_location);
 
         // Calculate the value of the rest length
         double rest_length = node_a_radius+node_b_radius;
 
+        //If we have an overlap
         if (norm_2(unit_difference) < rest_length)
         {
-            // Calculate the force between nodes
+            // Calculate the force between nodes and check it isn't nan. Uses the parent method CalculateForceBetweenNodes
             c_vector<double, DIM> force = this->CalculateForceBetweenNodes(p_node_a->GetIndex(), p_node_b->GetIndex(), rCellPopulation);
             c_vector<double, DIM> negative_force = -1.0 * force;
             for (unsigned j=0; j<DIM; j++)
@@ -91,7 +94,8 @@ void RepulsionForceSizeCorrected<DIM>::AddForceContribution(AbstractCellPopulati
                 assert(!std::isnan(force[j]));
             }
 
-            // Add the force contribution to each node CORRECTED BY CELL RADIUS AS A PROPORTION OF TYPICAL CHASTE CELL RADIUS (5 micron) 
+            // Add the force contribution to each node CORRECTED BY CELL RADIUS
+            // AS A PROPORTION OF THE NORMAL CHASTE CELL RADIUS (5 microns) 
             for (unsigned j=0; j<DIM; j++)
             {
                 force[j]         =force[j]/(node_a_radius/5.0);
@@ -103,6 +107,8 @@ void RepulsionForceSizeCorrected<DIM>::AddForceContribution(AbstractCellPopulati
     }
 }
 
+
+//Output parameters to log file. Nothing to add here.
 template<unsigned DIM>
 void RepulsionForceSizeCorrected<DIM>::OutputForceParameters(out_stream& rParamsFile)
 {

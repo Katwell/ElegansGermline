@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -34,65 +34,64 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "GonadArmDataOutput.hpp"
-#include "GlobalParameterStruct.hpp"
-#include "MeshBasedCellPopulation.hpp"
+#include "NodeBasedCellPopulation.hpp"
 
+
+//Constructor, initialises sampling interval and sets output file to null
 template<unsigned DIM>
-GonadArmDataOutput<DIM>::GonadArmDataOutput(int samplingInterval)
+GonadArmDataOutput<DIM>::GonadArmDataOutput(int interval)
     : AbstractCellBasedSimulationModifier<DIM>(),
-      OutputPositionFile(NULL)
-{
-  interval = samplingInterval;
-  OutputFileHandler rOutputFileHandler(GlobalParameterStruct::Instance()->GetDirectory(), false);
-  OutputPositionFile = rOutputFileHandler.OpenOutputFile("GonadData.txt");
-}
+      OutputFile(NULL),
+      mInterval(interval)
+{}
 
+
+//Empty destructor 
 template<unsigned DIM>
-GonadArmDataOutput<DIM>::~GonadArmDataOutput()
+GonadArmDataOutput<DIM>::~GonadArmDataOutput(){}
+
+
+//Getter methods for private members
+template<unsigned DIM>
+int GonadArmDataOutput<DIM>::GetInterval() const
 {
-  //if (OutputPositionFile!=NULL){
-    OutputPositionFile->close();
-  //}
+  return mInterval;
+};
+
+
+//Open an output file GonadData.txt in the simulation directory
+template<unsigned DIM>
+void GonadArmDataOutput<DIM>::SetupSolve(AbstractCellPopulation<DIM,DIM>& rCellPopulation, std::string outputDirectory)
+{
+  OutputFileHandler rOutputFileHandler(outputDirectory, false);
+  OutputFile = rOutputFileHandler.OpenOutputFile("GonadData.txt");
 }
 
-//At each timestep, loop through all cells and output IDs and positions along gonad arm.
+
+//At each timestep, if the time is a sampling time, loop through all cells and compile some general gonad data.
+//Output that data to file.
 template<unsigned DIM>
 void GonadArmDataOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,DIM>& rCellPopulation)
 {
 
-  if(SimulationTime::Instance()->GetTimeStepsElapsed()%interval==0){
+  //If it's a sampling time, start gathering some useful data
+  if(SimulationTime::Instance()->GetTimeStepsElapsed() % GetInterval() ==0){
 
-    double cellCycleDuration = (rCellPopulation.Begin())->GetCellCycleModel()->GetSDuration()
-                      +(rCellPopulation.Begin())->GetCellCycleModel()->GetG2Duration()
-                      +(rCellPopulation.Begin())->GetCellCycleModel()->GetTransitCellG1Duration()
-                      +(rCellPopulation.Begin())->GetCellCycleModel()->GetMDuration();
 
-    double gonadLength=0;
-
-    double lastProliferativeCell=0;
-    double firstMeioticCell=DBL_MAX;
-    
-    int totalCells = 0;
-    int spermCount = 0;
-    int prolifCount = 0;
-    int G1count=0;
-    int Scount=0;
-    int G2count = 0;
-    int Mcount=0;
-    int MeioticS=0;
-
-    double TimeArrested=0;
-
-    //Work out width of one cell row, based on separations:
-    int numberOfMeasurements = 0;
+    //Estimates the length in microns of one cell row, based on the cell separations in the first
+    //75 microns of the distal zone:
+    int    numberOfMeasurements = 0;
     double meanSeparation = 0;
-    double meioticCountArray[128] = {0};
-    double mitoticCountArray[128] = {0};
+    //loop over cells
     for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
-         cell_iter != rCellPopulation.End();++cell_iter)
-    { //consider distal arm only
-      if(cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC")<75.0 && cell_iter->GetCellData()->GetItem("IsDTC")==0.0){
+    cell_iter != rCellPopulation.End();++cell_iter)
+    { //consider distal arm germ cells only
+      if(cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC")<75.0 &&
+         cell_iter->GetCellData()->GetItem("IsDTC")==0.0)
+      {
+        //Get cell's compressed volume
         double vol = cell_iter->GetCellData()->GetItem("volume");
+        //Work out effective diameter and add to meanSeparation running total
         double diam = 2*pow(vol*0.239,0.3333);
         meanSeparation += diam;
         numberOfMeasurements++;
@@ -101,103 +100,154 @@ void GonadArmDataOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,D
     meanSeparation = meanSeparation/numberOfMeasurements;
 
 
+    //Initialize variables to store the data we'll generate while looping over all cells
+    double cellCycleDuration = (rCellPopulation.Begin())->GetCellCycleModel()->GetSDuration()
+                              +(rCellPopulation.Begin())->GetCellCycleModel()->GetG2Duration()
+                              +(rCellPopulation.Begin())->GetCellCycleModel()->GetTransitCellG1Duration()
+                              +(rCellPopulation.Begin())->GetCellCycleModel()->GetMDuration();
+    double gonadLength = 0;
+    double lastProliferativeCell = 0;
+    double firstMeioticCell = DBL_MAX;
+    int totalCells = 0;
+    int spermCount = 0;
+    int prolifCount = 0;
+    int G1count = 0;
+    int Scount = 0;
+    int G2count = 0;
+    int Mcount = 0;
+    int MeioticS = 0;
+    double TimeArrested = 0;
+    double meioticCountArray[128] = {0}; // <- These arrays store info on whether there is
+    double mitoticCountArray[128] = {0}; // a prolif cell / 2 meiotic cells in each row for 
+                                         // the first 128 rows.
+
+    //Loop over cells
     for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
-         cell_iter != rCellPopulation.End();++cell_iter)
+    cell_iter != rCellPopulation.End();++cell_iter)
     {
 
+      //Work out a cell's row (counting from the DTC), based on the mean compressed cell diameter
       double dist = cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC");
-      if(dist<150.0){
-       double row = round(dist/meanSeparation);
-       cell_iter->GetCellData()->SetItem("RowNumber",row);
-       if(cell_iter->GetCellData()->GetItem("CellCyclePhase")<0){
+      double row = round(dist / meanSeparation);
+      cell_iter->GetCellData()->SetItem("RowNumber",row);
+      double phase = cell_iter->GetCellData()->GetItem("CellCyclePhase");
+      //For the first 128 rows:
+      if(row < 128.0){
+       if(phase < 0){
+        //If cell is in meiosis, record the fact in meioticCountArray
         meioticCountArray[(int)row] = meioticCountArray[(int)row] + 1;
        }else{
+        //otherwise record a proliferative cell in mitoticCountArray
         mitoticCountArray[(int)row] = mitoticCountArray[(int)row] + 1;
        }
       }
 
-      //Establish gonad length
-      if(cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC")>gonadLength){
-        gonadLength = cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC");
+      //Establish the gonad length
+      if(dist > gonadLength){
+        gonadLength = dist;
       }
 
       //Count sperm 
-      if(cell_iter->GetCellData()->GetItem("Differentiation_Sperm")==1.0){
+      if(cell_iter->GetCellData()->GetItem("Differentiation_Sperm") == 1.0){
         spermCount++;
       }
 
-      //count proliferative cells and length of zone
-      if(cell_iter->GetCellData()->GetItem("CellCyclePhase")!=-1.0){
+      //count proliferative cells and calculate the positions of the closes meiotic cell to the
+      //DTC and furthest mitotic cell from DTC
+      if(phase > 0.0){
         prolifCount++;
-      if (cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC")>lastProliferativeCell){
-        lastProliferativeCell = cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC");
+        if (dist >lastProliferativeCell){
+          lastProliferativeCell = dist;
         }
       }else{
-        if (cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC")<firstMeioticCell){
-        firstMeioticCell = cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC");
+        if (dist < firstMeioticCell){
+          firstMeioticCell = dist;
         }
       }
 
-      //Count number in each phase
-      if(cell_iter->GetCellData()->GetItem("CellCyclePhase")==1.0){
-          G1count++;
-          TimeArrested+=cell_iter->GetCellData()->GetItem("ArrestedFor");
-      }else if(cell_iter->GetCellData()->GetItem("CellCyclePhase")==2.0){
+      //Count number of cells in each phase, and track how long cells are spending in arrest
+      if(phase == 1.0){
+        G1count++;
+         TimeArrested += cell_iter->GetCellData()->GetItem("ArrestedFor");
+      }else if(phase == 2.0){
         Scount++;
         TimeArrested += cell_iter->GetCellData()->GetItem("ArrestedFor");
-      }else if(cell_iter->GetCellData()->GetItem("CellCyclePhase")==3.0){
+      }else if(phase == 3.0){
         G2count++;
-          TimeArrested+=cell_iter->GetCellData()->GetItem("ArrestedFor");
-      }else if(cell_iter->GetCellData()->GetItem("CellCyclePhase")==4.0){
+          TimeArrested += cell_iter->GetCellData()->GetItem("ArrestedFor");
+      }else if(phase == 4.0){
         Mcount++;
         TimeArrested += cell_iter->GetCellData()->GetItem("ArrestedFor");
-      }else if(cell_iter->GetCellData()->GetItem("CellCyclePhase")==2.5){
-          MeioticS++;
+      }else if(phase == 2.5){
+        MeioticS++;
       }
 
       //Count total cells
       totalCells++;
     }
 
+    //Loop through our stored info on the cells each row contains. Work out which is
+    //the first meiotic row (with 2 meiotic cells) and which is the last mitotic row
+    //(1 proliferative cell)
     int firstMeioticRow = 128;
     int lastMitoticRow = 0;
     for(int i=0; i<128; i++){
-      if(meioticCountArray[i]>1 && i<firstMeioticRow){
+      if(meioticCountArray[i] > 1 && i < firstMeioticRow){
         firstMeioticRow = i;
       }
-      if(mitoticCountArray[i]>0 && i>lastMitoticRow){
+      if(mitoticCountArray[i] > 0 && i > lastMitoticRow){
         lastMitoticRow = i;
       }
     }
 
-    double deathRate;
-    if (SimulationTime::Instance()->GetTime() > 17.0){
-      deathRate = GlobalParameterStruct::Instance()->GetParameter(21);
-    }
-    else{
-      deathRate = 0.0;
-    }
+    //Get the cell death rate parameter, just for reference really. TODO: replace with
+    //a count of the actual number of apoptotic cells? Would be more informative.
+    double deathRate = GlobalParameterStruct::Instance()->GetParameter(21);
     
+    //Add mean time spent in arrest to the programmed in cell cycle duration
     cellCycleDuration += (TimeArrested) / (Mcount + Scount + G2count + G1count);
 
-    *OutputPositionFile << SimulationTime::Instance()->GetTime() << "\t" << gonadLength << "\t" << cellCycleDuration << "\t" << spermCount << "\t" <<
-        prolifCount << "\t" << deathRate << "\t" << totalCells << "\t" << lastProliferativeCell << "\t" << firstMeioticCell << "\t" <<
-            G1count << "\t" << Scount << "\t" << G2count << "\t" << Mcount << "\t" << MeioticS << "\t" << firstMeioticRow << "\t" << lastMitoticRow  << "\n";
-    OutputPositionFile->flush();
+    //Write data
+    *OutputFile << SimulationTime::Instance()->GetTime() << "\t" 
+                << gonadLength << "\t" 
+                << cellCycleDuration << "\t" 
+                << spermCount << "\t" 
+                << prolifCount << "\t" 
+                << deathRate << "\t" 
+                << totalCells << "\t" 
+                << lastProliferativeCell << "\t" 
+                << firstMeioticCell << "\t" 
+                << G1count << "\t" 
+                << Scount << "\t" 
+                << G2count << "\t" 
+                << Mcount << "\t" 
+                << MeioticS << "\t" 
+                << firstMeioticRow << "\t" 
+                << lastMitoticRow  << "\n";
+    
+    //Flush the output file to record data as soon as possible
+    OutputFile->flush();
+
+    //Output time for reference
+    std::cout << "Time = " << SimulationTime::Instance()->GetTime() << std::endl;
+  }
+
+  //If the simulation is finished, close the output file.
+  if(SimulationTime::Instance()->IsFinished()){
+    OutputFile->close();
   }
 }
 
-template<unsigned DIM>
-void GonadArmDataOutput<DIM>::SetupSolve(AbstractCellPopulation<DIM,DIM>& rCellPopulation, std::string outputDirectory)
-{
-}
 
-
+//Output this class's parameters to a log file
 template<unsigned DIM>
 void GonadArmDataOutput<DIM>::OutputSimulationModifierParameters(out_stream& rParamsFile)
 {
-  // No parameters to output
+  *rParamsFile << "\t\t\t<SampleDataEveryXTimesteps>" << mInterval << "</SampleDataEveryXTimesteps>\n";
+  // Call method on direct parent class
+  AbstractCellBasedSimulationModifier<DIM>::OutputSimulationModifierParameters(rParamsFile); 
 }
+
 
 /////////////////////////////////////////////////////////////////////////////
 // Explicit instantiation

@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -33,57 +33,76 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#include "RandomCellKillerByType.hpp"
 
+#include "OocyteFatedCellApoptosis.hpp"
+
+
+//Constructor, initialises mHourlyProbabilityOfDeath
 template<unsigned DIM>
-RandomCellKillerByType<DIM>::RandomCellKillerByType(AbstractCellPopulation<DIM>* pCellPopulation, double hourlyProbabilityOfDeath)
+OocyteFatedCellApoptosis<DIM>::OocyteFatedCellApoptosis(AbstractCellPopulation<DIM>* pCellPopulation, double HourlyProbabilityOfDeath)
         : AbstractCellKiller<DIM>(pCellPopulation),
-          HourlyProbabilityOfDeath(hourlyProbabilityOfDeath){
+          mHourlyProbabilityOfDeath(HourlyProbabilityOfDeath){
 }
 
+
+//Empty destructor
 template<unsigned DIM>
-RandomCellKillerByType<DIM>::~RandomCellKillerByType(){
+OocyteFatedCellApoptosis<DIM>::~OocyteFatedCellApoptosis(){
 }
 
+
+//Getter for mHourlyProbabilityOfDeath
 template<unsigned DIM>
-double RandomCellKillerByType<DIM>::GetHourlyProbabilityOfDeath() const
+double OocyteFatedCellApoptosis<DIM>::GetHourlyProbabilityOfDeath() const
 {
-    return HourlyProbabilityOfDeath;
+    return mHourlyProbabilityOfDeath;
 }
 
+
+/*
+* Actual cell killer method. Also sets the property Apoptosis to 1.0, incase another class wants
+* to count the number of dying cells at any given moment.
+*/
 template<unsigned DIM>
-void RandomCellKillerByType<DIM>::CheckAndLabelSingleCellForApoptosis(CellPtr pCell)
+void OocyteFatedCellApoptosis<DIM>::CheckAndLabelSingleCellForApoptosis(CellPtr pCell)
 {
   if (!pCell->HasApoptosisBegun()){
-      pCell->StartApoptosis();
-      pCell->GetCellData()->SetItem("Apoptosis", 1.0);
+    pCell->StartApoptosis();
+    pCell->GetCellData()->SetItem("Apoptosis", 1.0);
   }
 }
 
 
+//Method that determines which cells should diie
 template<unsigned DIM>
-void RandomCellKillerByType<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
+void OocyteFatedCellApoptosis<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
 {
-    for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = this->mpCellPopulation->Begin();
-      cell_iter != this->mpCellPopulation->End();
-      ++cell_iter)
-    {
 
-      if (cell_iter->GetCellData()->GetItem("OocyteFated") == 1.0 &&
-        cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC") < 250.0){
+  //Loop over the cell population
+  for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = this->mpCellPopulation->Begin();
+  cell_iter != this->mpCellPopulation->End(); ++cell_iter)
+  {
 
-        if (RandomNumberGenerator::Instance()->ranf() < (1.0 - pow((1.0 - HourlyProbabilityOfDeath), SimulationTime::Instance()->GetTimeStep()))){
-          CheckAndLabelSingleCellForApoptosis(*cell_iter);
-        }
+    //Identify oocyte fated cells that are still less than 250 microns from the DTC
+    if (cell_iter->GetCellData()->GetItem("OocyteFated") == 1.0 &&
+      cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC") < 250.0){
+
+      // Random number generator used to determine if this cell should undergo apoptosis. The probability
+      // of death used here is based on the Chaste class "RandomCellKiller"
+      if (RandomNumberGenerator::Instance()->ranf() < 
+         (1.0 - pow((1.0 - mHourlyProbabilityOfDeath), SimulationTime::Instance()->GetTimeStep()) ) ){
+         CheckAndLabelSingleCellForApoptosis(*cell_iter);
       }
     }
+  }
 }
 
 
+//Output mHourlyProbabilityOfDeath parameter to a log file
 template<unsigned DIM>
-void RandomCellKillerByType<DIM>::OutputCellKillerParameters(out_stream& rParamsFile)
+void OocyteFatedCellApoptosis<DIM>::OutputCellKillerParameters(out_stream& rParamsFile)
 {
-    *rParamsFile << "\t\t\t<HourlyProbabilityOfDeath>" << HourlyProbabilityOfDeath << "</HourlyProbabilityOfDeath>\n";
+    *rParamsFile << "\t\t\t<HourlyProbabilityOfDeath>" << mHourlyProbabilityOfDeath << "</HourlyProbabilityOfDeath>\n";
 
     // Call method on direct parent class
     AbstractCellKiller<DIM>::OutputCellKillerParameters(rParamsFile);
@@ -93,10 +112,8 @@ void RandomCellKillerByType<DIM>::OutputCellKillerParameters(out_stream& rParams
 // Explicit instantiation
 /////////////////////////////////////////////////////////////////////////////
 
-template class RandomCellKillerByType<1>;
-template class RandomCellKillerByType<2>;
-template class RandomCellKillerByType<3>;
+template class OocyteFatedCellApoptosis<3>;
 
 // Serialization for Boost >= 1.36
 #include "SerializationExportWrapperForCpp.hpp"
-EXPORT_TEMPLATE_CLASS_SAME_DIMS(RandomCellKillerByType)
+EXPORT_TEMPLATE_CLASS_SAME_DIMS(OocyteFatedCellApoptosis)

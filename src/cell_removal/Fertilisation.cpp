@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -33,20 +33,24 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
+
 #include "Fertilisation.hpp"
 
+
+//Constructor, initialises mSpermathecaLength
 template<unsigned DIM>
 Fertilisation<DIM>::Fertilisation(AbstractCellPopulation<DIM>* pCellPopulation, double spermathecaLength)
-    : AbstractCellKiller<DIM>(pCellPopulation),
+    :AbstractCellKiller<DIM>(pCellPopulation),
     mSpermathecaLength(spermathecaLength){
 }
 
 
+//Empty destructor
 template<unsigned DIM>
-Fertilisation<DIM>::~Fertilisation(){
-}
+Fertilisation<DIM>::~Fertilisation(){}
 
 
+//Getter for spermathecaLength
 template<unsigned DIM>
 double Fertilisation<DIM>::GetSpermathecaLength() const
 {
@@ -54,6 +58,7 @@ double Fertilisation<DIM>::GetSpermathecaLength() const
 }
 
 
+//Kills the selected cell
 template<unsigned DIM>
 void Fertilisation<DIM>::CheckAndLabelSingleCellForApoptosis(CellPtr pCell)
 {
@@ -67,9 +72,9 @@ template<unsigned DIM>
 void Fertilisation<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
 {
 
-    bool stop = false;
+    bool stopOvulation = false;
 
-    //If the worm has reached adulthood...
+    //IF the worm has reached adulthood (occurs after 17 simulated hours)...
     if (SimulationTime::Instance()->GetTime() > 17.0){
 
         //Determine the final length of the gonad, so we can work out how far a cell must be from the DTC
@@ -79,6 +84,7 @@ void Fertilisation<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
             cell_iter != this->mpCellPopulation->End();
             ++cell_iter)
         {
+            //Loop over cells and find max distance from DTC. That value = total gonad length
             if (cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC") > gonadLength){
                 gonadLength = cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC");
             }
@@ -90,24 +96,26 @@ void Fertilisation<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
             ++cell_iter)
         {
             
-            //Loop over all cells and only consider mature oocytes in the spermatheca 
+            //Loop over all cells again, and now only consider mature, unfertilised oocytes in the spermatheca 
             if (cell_iter->GetCellData()->GetItem("Differentiation_Oocyte") == 1.0 
                 && gonadLength - cell_iter->GetCellData()->GetItem("DistanceAwayFromDTC") <= mSpermathecaLength 
                 && cell_iter->HasApoptosisBegun() == false
-                && stop==false){
+                && stopOvulation==false){
 
-                //Now loop through in search of fertilising sperm
+                //Now loop through again in search of a sperm in the spermatheca
                 for (typename AbstractCellPopulation<DIM>::Iterator cell_iter2 = this->mpCellPopulation->Begin();
                     cell_iter2 != this->mpCellPopulation->End(); ++cell_iter2)
                 {
                     if (cell_iter2->GetCellData()->GetItem("Differentiation_Sperm") == 1.0
                         && cell_iter2->HasApoptosisBegun() == false
                         && gonadLength - cell_iter2->GetCellData()->GetItem("DistanceAwayFromDTC") <= mSpermathecaLength
-                        && stop==false){
+                        && stopOvulation==false){
 
+                        //If we found a suitable sperm and oocyte, label both for death
                         CheckAndLabelSingleCellForApoptosis(*cell_iter2);
                         CheckAndLabelSingleCellForApoptosis(*cell_iter);
-                        stop = true;
+                        //Stop any further ovulations at this timestep (only one ovulation can occur at a time!)
+                        stopOvulation = true;
                     }
                 }
 
@@ -118,6 +126,7 @@ void Fertilisation<DIM>::CheckAndLabelCellsForApoptosisOrDeath()
 }
 
 
+//Save new parameter mSpermathecaLength to log file
 template<unsigned DIM>
 void Fertilisation<DIM>::OutputCellKillerParameters(out_stream& rParamsFile)
 {
@@ -126,6 +135,7 @@ void Fertilisation<DIM>::OutputCellKillerParameters(out_stream& rParamsFile)
     // Call method on direct parent class
     AbstractCellKiller<DIM>::OutputCellKillerParameters(rParamsFile);
 }
+
 
 /////////////////////////////////////////////////////////////////////////////
 // Explicit instantiation

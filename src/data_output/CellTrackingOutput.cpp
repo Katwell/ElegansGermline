@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -36,62 +36,97 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CellTrackingOutput.hpp"
 #include "GlobalParameterStruct.hpp"
 
+
+//Constructor 
 template<unsigned DIM>
 CellTrackingOutput<DIM>::CellTrackingOutput(int samplingInterval, int cellIdInterval)
     : AbstractCellBasedSimulationModifier<DIM>(),
-      OutputFile(NULL)
-{
-  interval = samplingInterval;
-  idInterval = cellIdInterval;
-  OutputFileHandler rOutputFileHandler(GlobalParameterStruct::Instance()->GetDirectory(), false);
-  OutputFile = rOutputFileHandler.OpenOutputFile("TrackingData.txt");
-}
+      OutputFile(NULL),
+      mSamplingInterval(samplingInterval),
+      mCellIdInterval(cellIdInterval){}
 
+
+//Destructor
 template<unsigned DIM>
-CellTrackingOutput<DIM>::~CellTrackingOutput()
-{
-}
+CellTrackingOutput<DIM>::~CellTrackingOutput(){};
 
-//At each timestep, loop through all cells and output IDs and positions along gonad arm.
+
+//Prepare for solve by opening an output file in the appropriate directory.
+template<unsigned DIM>
+void CellTrackingOutput<DIM>::SetupSolve(AbstractCellPopulation<DIM,DIM>& rCellPopulation,
+std::string outputDirectory){
+  OutputFileHandler rOutputFileHandler(outputDirectory, false);
+  OutputFile = rOutputFileHandler.OpenOutputFile("TrackingData.txt");
+};
+
+
+
+/*
+* Getters for the private member variables
+*/
+template<unsigned DIM>
+int CellTrackingOutput<DIM>::GetSamplingInterval() const
+{
+  return mSamplingInterval;
+};
+template<unsigned DIM>
+int CellTrackingOutput<DIM>::GetCellIdInterval() const
+{
+  return mCellIdInterval;
+};
+
+
+
+/*
+* Actual data recording function. 
+* At each timestep, if it's time for a new datapoint to be recorded, loop through all the cells and then output IDs
+* and positions for those with IDs divisible by mCellIdInterval.
+*/
 template<unsigned DIM>
 void CellTrackingOutput<DIM>::UpdateAtEndOfTimeStep(AbstractCellPopulation<DIM,DIM>& rCellPopulation)
 {
-  //std::cout << SimulationTime::Instance()->GetTime() << "\t" << "Tracking" << "\t" << time(NULL) << std::endl;
+  
+  //If it's an output timestep
+  if (SimulationTime::Instance()->GetTimeStepsElapsed() % GetSamplingInterval() == 0){
 
-  if (SimulationTime::Instance()->GetTimeStepsElapsed() % interval == 0){
-
+    //Loop over cells
     for (typename AbstractCellPopulation<DIM>::Iterator cell_iter = rCellPopulation.Begin();
-      cell_iter != rCellPopulation.End(); ++cell_iter)
+    cell_iter != rCellPopulation.End(); ++cell_iter)
     {
+
+      //Get cell ID from the cell's associated node
       Node<DIM>* node = rCellPopulation.GetNode(rCellPopulation.GetLocationIndexUsingCell(*cell_iter));
       unsigned id = cell_iter->GetCellId();
 
-      if (id%idInterval == 0 && id!=0){
+      //If the cell meets the cellIDInterval requirement and is not ID = 0, output the position.
+      //Prohibition on the ID=0 cell is because this cell is the DTC, not a germ cell in C. elegans germ line
+      // simulations. That condition can be removed.  
+      if (id % GetCellIdInterval() == 0 && id != 0){
         c_vector<double, DIM> location = node->rGetLocation();
-        *OutputFile << SimulationTime::Instance()->GetTime() << "\t" << id << "\t" <<  location[0] << "\t" <<  location[1] << "\t" <<  location[2] << "\n";
+        *OutputFile << SimulationTime::Instance()->GetTime() << "\t" << id 
+        << "\t" <<  location[0] << "\t" <<  location[1] << "\t" <<  location[2] << "\n";
       }
     }
-   
+  
+  //Output the data to file immediately, so if the simulation crashes you will have some data saved
   OutputFile->flush();
-
   }
 
+  //If simulation is finished, close the output file.
   if(SimulationTime::Instance()->IsFinished()){
-    //Close output file
     OutputFile->close();
   }
 }
 
-template<unsigned DIM>
-void CellTrackingOutput<DIM>::SetupSolve(AbstractCellPopulation<DIM,DIM>& rCellPopulation, std::string outputDirectory)
-{
-}
 
-
+//Output properties of this cell data recorder to file.
 template<unsigned DIM>
 void CellTrackingOutput<DIM>::OutputSimulationModifierParameters(out_stream& rParamsFile)
 {
-  // No parameters to output
+  *rParamsFile << "\t\t\t<SamplePositionsEveryXTimesteps>" << mSamplingInterval << "</SamplePositionsEveryXTimesteps>\n";
+  *rParamsFile << "\t\t\t<SampleEveryNthCellPosition>" << mCellIdInterval << "</SampleEveryNthCellPosition>\n";
+  // Call method on direct parent class
+  AbstractCellBasedSimulationModifier<DIM>::OutputSimulationModifierParameters(rParamsFile);
 }
 
 

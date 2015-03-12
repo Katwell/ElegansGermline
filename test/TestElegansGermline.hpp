@@ -34,7 +34,7 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef TESTELEGANSGERMLINE_HPP_
 #define TESTELEGANSGERMLINE_HPP_
 
-/*Tests larval development of the C. elegans gonad, which forms behind an explicitly modelled Distal Tip Cell*/
+//Chaste and system headers
 #include <cxxtest/TestSuite.h>
 #include "CheckpointArchiveTypes.hpp"
 #include "AbstractCellBasedTestSuite.hpp"
@@ -48,29 +48,32 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "CellBasedSimulationArchiver.hpp"
 #include "VolumeTrackingModifier.hpp"
 #include "CellAncestorWriter.hpp"
-#include "CellBasedSimulationArchiver.hpp"
+#include "RandomNumberGenerator.hpp"
 #include <string>
 #include <iostream>
-#include <fstream>
-#include <sstream>
 #include <vector>
-#include <cmath>
 #include <ctime>
 
 //Elegans specific headers
-#include "DTCMovementModel.hpp"
-#include "LeaderCellBoundaryCondition.hpp"
-#include "RepulsionForceSizeCorrected.hpp"
-#include "RepulsionForce.hpp"
-#include "StatechartCellCycleModel.hpp"
-#include "FixedDurationGenerationBasedCellCycleModel.hpp"
-#include "GonadArmDataOutput.hpp"
-#include "CellTrackingOutput.hpp"
-#include "GlobalParameterStruct.hpp"
-#include "RandomCellKillerByType.hpp"
-#include "Fertilisation.hpp"
-#include "CellBasedEventHandler.hpp"
+#include "GlobalParameterStruct.hpp"                // parameter storage and read-in from file
+#include "DTCMovementModel.hpp"                     // leader cell movement
+#include "LeaderCellBoundaryCondition.hpp"          // boundary condition
+#include "RepulsionForceSizeCorrected.hpp"          // force law
+#include "GonadArmDataOutput.hpp"                   // data recording
+#include "CellTrackingOutput.hpp"                   // cell tracking
+#include "OocyteFatedCellApoptosis.hpp"             // apoptosis
+#include "Fertilisation.hpp"                        // fertilisation
+#include "StatechartCellCycleModel.hpp"             // statechart wrapper class
+#include "ElegansDevStatechartCellCycleModel.hpp"   // elegans specific changes in cell cycle length
+#include "FateUncoupledFromCycle.hpp"               // statechart model of cell behaviour 
 
+
+/*
+* Simulates the larval development and adult maintenance of the C. elegans gonad, which forms behind
+* the moving Distal Tip Cell. The gonad is filled with dividing germ cells that behave according to a
+* given statechart model.
+* Run as ./TestElegansGermlineRunner "Baseline.txt"
+*/
 
 class TestElegansWithLeaderCell : public AbstractCellBasedTestSuite
 {
@@ -78,141 +81,223 @@ class TestElegansWithLeaderCell : public AbstractCellBasedTestSuite
 public:
 
     void TestLarvalDevelopment() throw(Exception){
+
+        //0) Seed random number generator with the system time----------------------
+
+        int seed = (int)std::time(NULL);
+        std::cout << seed << std::endl;
+        RandomNumberGenerator::Instance()->Reseed(seed);      
     
-        //---------------------------Set parameters----------------------------------
-        int count;
-        // Display each command-line argument.
-        std::cout << "\nCommand-line arguments:" << *(CommandLineArguments::Instance()->p_argc) << "\n";
-        for (count = 0; count < *(CommandLineArguments::Instance()->p_argc); count++)
-            std::cout << "  argv[" << count << "]   "
-            << (*(CommandLineArguments::Instance()->p_argv))[count] << "\n";
+
+        //1) Read in parameter set from the config file specified in the first command 
+        //line argument---------------------------------------------------------------
         
-        std::string myParametersFilesDirectory = "/Users/kathryn/Documents/PhDYear2Term1/Chaste/projects/kathryna/data/";
-        GlobalParameterStruct::Instance((*(CommandLineArguments::Instance()->p_argv))[1], myParametersFilesDirectory);
-        double startingLength = 32;
-    
-        //------------Initialise simulation by setting up nodes----------------------     
-        std::vector<Node<3>*> nodes;
-        int index = 0;
-        for (double i = GlobalParameterStruct::Instance()->GetParameter(0); i >= 0; i--){
-            Node<3>* myNode;
-            myNode = new Node<3>(index, false, 0, -GlobalParameterStruct::Instance()->GetParameter(7), 1.8*i);
-            nodes.push_back(myNode);
-            index++;
+        std::cout << std::endl << "Selected parameters file: " << 
+                     (*(CommandLineArguments::Instance()->p_argv))[1] << std::endl;      
+        std::string myParameterFilesDirectory = "./projects/ElegansGermline/data/";
+        
+        GlobalParameterStruct* parameters = GlobalParameterStruct::Instance();
+        parameters -> ConfigureFromFile( (*(CommandLineArguments::Instance()->p_argv))[1], myParameterFilesDirectory);
+        
+        // HELPER CODE FOR PARAMETER SWEEPING! When uncommented, the program takes a second 
+        // command line argument: the name of the results output directory. It also accepts
+        // arbitrarily many subsequent pairs of command line arguments that can be used to make
+        // small alterations to the parameter set. So for instance:
+        //
+        // ./TestElegansGermlineRunner "Baseline.txt" "MyOutput1"  5  3.4 
+        //
+        // would run with most parameters as specified in Baseline.txt; the output directory 
+        // would be set to MyOutput1, and parameter number 5 would be reset to equal 3.4.
+        //
+        parameters->ResetDirectoryName( (*(CommandLineArguments::Instance()->p_argv))[2] );   
+        std::cout << "New output directory name: " << (*(CommandLineArguments::Instance()->p_argv))[2] << std::endl;
+        
+        int nArgs = (*(CommandLineArguments::Instance()->p_argc));
+        
+        for (int i=3; i<nArgs-1; i+=2){
+            parameters->ResetParameter(atof( (*(CommandLineArguments::Instance()->p_argv))[i] ) ,
+                                       atof( (*(CommandLineArguments::Instance()->p_argv))[i+1] ));
+        
+            std::cout << "Param number: " << 
+            atof( (*(CommandLineArguments::Instance()->p_argv))[i] ) <<
+            " New value: " <<
+            atof( (*(CommandLineArguments::Instance()->p_argv))[i+1] ) << std::endl;
         }
-        NodesOnlyMesh<3>* p_mesh = new NodesOnlyMesh<3>;
-        p_mesh->ConstructNodesWithoutMesh(nodes, 25);
+
+        //---------------------------------------------------------------------------
     
-        //---------------------Initialise cells from the nodes------------------------ 
+
+
+        // 2) Create a node corresponding to each starting cell----------------------
+
+        std::vector< Node<3>* > nodes;
+        int cellIndex = 0;
+        for (double i = parameters->GetParameter(0); i >= 0; i--){ //parameters[0] is number of starting cells
+            Node<3>* newNode;
+            newNode = new Node<3>(cellIndex, false, 0, -parameters->GetParameter(7), 1.8*i); //cellID, _, x, y, z
+            nodes.push_back(newNode);
+            cellIndex++;
+        }
+        NodesOnlyMesh<3>* p_mesh = new NodesOnlyMesh<3>; //make a 3D mesh from the nodes
+        p_mesh->ConstructNodesWithoutMesh(nodes, 25);    //specify a max interaction distance of 25, > 2x max cell radius
+    
+        //----------------------------------------------------------------------------
+
+
+
+        // 3) Initialise some cells from the nodes, and select a cell cycle model-----
+
         std::vector<CellPtr> cells;
         MAKE_PTR(StemCellProliferativeType, p_stem_type);
         MAKE_PTR(DifferentiatedCellProliferativeType, p_diff_type);
-        CellsGenerator<StatechartCellCycleModelSerializable, 3> cells_generator;
+
+        //choice of model is "ElegansDevStatechartCellCycleModel" with the statechart "FateUncoupledFromCycle":
+        CellsGenerator< ElegansDevStatechartCellCycleModel < FateUncoupledFromCycle >, 3> cells_generator;
+        
         cells_generator.GenerateBasicRandom(cells, p_mesh->GetNumNodes(), p_stem_type);
-        NodeBasedCellPopulation<3> cell_population(*p_mesh, cells);
+        NodeBasedCellPopulation<3> cell_population(*p_mesh, cells); // <- finally, we have a cell population!
     
-        //Setup the properties of the cells        
+        //----------------------------------------------------------------------------
+
+
+
+        // 4) Setup the properties of the cells---------------------------------------       
+
         for (AbstractCellPopulation<3>::Iterator cell_iter = cell_population.Begin();
             cell_iter != cell_population.End(); ++cell_iter)
         {
             Node<3>* node = cell_population.GetNode(cell_population.GetLocationIndexUsingCell(*cell_iter));
             if (node->GetIndex() == 0){
-                cell_iter->GetCellData()->SetItem("IsDTC", 1.0);
-                cell_iter->SetCellProliferativeType(p_diff_type);
+                cell_iter->GetCellData()->SetItem("IsDTC", 1.0);  //Make the cell with node index 0 the DTC
+                cell_iter->SetCellProliferativeType(p_diff_type); //The DTC is terminally differentiated
             }
             else{
                 cell_iter->GetCellData()->SetItem("IsDTC", 0.0);
             }
-            cell_iter->GetCellData()->SetItem("DistanceAwayFromDTC", 0.0);
+            cell_iter->GetCellData()->SetItem("DistanceAwayFromDTC", 0.0); //Set other cell data
             cell_iter->GetCellData()->SetItem("RowNumber", 0.0);
-            cell_iter->GetCellData()->SetItem("Radius", GlobalParameterStruct::Instance()->GetParameter(9));
-            cell_iter->GetCellData()->SetItem("MaxRadius", GlobalParameterStruct::Instance()->GetParameter(9));     
+            cell_iter->GetCellData()->SetItem("Radius", parameters->GetParameter(9));  // parameters[9] = initial radius
+            cell_iter->GetCellData()->SetItem("MaxRadius", parameters->GetParameter(9));   
+            cell_iter->GetCellData()->SetItem("SpermFated", 0.0);
+            cell_iter->GetCellData()->SetItem("OocyteFated", 0.0);  
             cell_iter->GetCellData()->SetItem("Differentiation_Sperm", 0.0);
             cell_iter->GetCellData()->SetItem("Differentiation_Oocyte", 0.0);
-            cell_iter->GetCellData()->SetItem("SpermFated", 0.0);
-            cell_iter->GetCellData()->SetItem("OocyteFated", 0.0);
             cell_iter->GetCellData()->SetItem("Fertilised", 0.0);
             cell_iter->GetCellData()->SetItem("PreviousClosestPointIndex", -1);
             cell_iter->GetCellData()->SetItem("ArrestedFor", 0.0);
+            cell_iter->GetCellData()->SetItem("InProximalArm", 1.0);
         }
-        cell_population.SetAbsoluteMovementThreshold(2.5);
-        cell_population.SetDampingConstantNormal(GlobalParameterStruct::Instance()->GetParameter(12));
-        cell_population.SetUseVariableRadii(true);
-
-        cell_population.SetCellAncestorsToLocationIndices();
+        cell_population.SetAbsoluteMovementThreshold(2.5);                      // Max cell movement in one timestep
+        cell_population.SetDampingConstantNormal(parameters->GetParameter(12)); // Baseline cell drag coefficient
+        cell_population.SetUseVariableRadii(true);                              // Different sized cells will be used
+        cell_population.SetCellAncestorsToLocationIndices();                    // Request cell lineage tracking
         cell_population.AddCellWriter<CellAncestorWriter>();
 
+        //----------------------------------------------------------------------------
 
-        //-------------------------Setup simulation----------------------------
+
+
+        // 5) Setup the simulation----------------------------------------------------
+
         OffLatticeSimulation<3> simulator(cell_population);
-        simulator.SetOutputDirectory(GlobalParameterStruct::Instance()->GetDirectory().c_str());
-        simulator.SetSamplingTimestepMultiple(GlobalParameterStruct::Instance()->GetParameter(36));
-        simulator.SetDt(1.0/GlobalParameterStruct::Instance()->GetParameter(36));
-        simulator.SetEndTime(GlobalParameterStruct::Instance()->GetParameter(35));
+        simulator.SetOutputDirectory(parameters->GetDirectory().c_str());    // Set output directory name
+        simulator.SetSamplingTimestepMultiple(parameters->GetParameter(36)); // How frequently to output a snapshot
+        simulator.SetDt(1.0/parameters->GetParameter(36));                   // Length of a timestep (parameters[36])
+        simulator.SetEndTime(parameters->GetParameter(35));                  // End time (parameters[35])
         
+        //----------------------------------------------------------------------------
+
+
     
-        //-------------------------------Forces-------------------------------- 
+        // 6) Add a force between cells-----------------------------------------------
+
         MAKE_PTR(RepulsionForceSizeCorrected<3>, p_force);
-        p_force->SetMeinekeSpringStiffness(GlobalParameterStruct::Instance()->GetParameter(13));
+        p_force->SetMeinekeSpringStiffness(parameters->GetParameter(13));   //Set force strength (parameters[13])
         simulator.AddForce(p_force);
     
+        //----------------------------------------------------------------------------
+
+
     
-        //-----------------------Boundary Condition Modifiers--------------------  
+        // 7) Boundary Condition------------------------------------------------------
+
         double MidlinePointSpacing = 2;
-        std::vector< c_vector<double, 3> > MidlinePointCollection;
-        std::vector< int > MidlinePointTypes;
+        double initialGonadLength = 32;
+        std::vector< c_vector<double, 3> > MidlinePointCollection; // Points on the DTC path
+        std::vector< int > MidlinePointTypes;                      // Records whether a point is part of a straight or the turn
         
-        //initialise midline points for the gonad at start of simulation 
+        //initialise the points on the gonad midline at start of the simulation: 
         double newPointZ = 0;
         c_vector<double, 3> aPoint;
-        while (newPointZ < startingLength){
+        while (newPointZ < initialGonadLength){
             aPoint[0] = 0;
-            aPoint[1] = -GlobalParameterStruct::Instance()->GetParameter(7);
+            aPoint[1] = -parameters->GetParameter(7);   //y coord of the middle of the proximal straight
             aPoint[2] = newPointZ;
             MidlinePointCollection.push_back(aPoint);
-            MidlinePointTypes.push_back(0);
+            MidlinePointTypes.push_back(0);             //0 codes for "part of the proximal straight"
             newPointZ += MidlinePointSpacing;
         }
-        
-        MAKE_PTR_ARGS(DTCMovementModel<3>, dtcMovement, (MidlinePointCollection, MidlinePointTypes, aPoint, MidlinePointSpacing, false, false, 0.0));
+        //add code that moves the DTC
+        MAKE_PTR_ARGS(DTCMovementModel<3>, dtcMovement, (false, false, 0.0, MidlinePointCollection, MidlinePointTypes, aPoint, MidlinePointSpacing));
         simulator.AddSimulationModifier(dtcMovement);
-        MAKE_PTR_ARGS(LeaderCellBoundaryCondition<3>, boundaryCondition, (&cell_population, dtcMovement, GlobalParameterStruct::Instance()->GetParameter(28)));
+        //add a leader cell based boundary condition
+        MAKE_PTR_ARGS(LeaderCellBoundaryCondition<3>, boundaryCondition, (&cell_population, dtcMovement, parameters->GetParameter(28)) ); //Parameters[28]: initial gonad radius
         simulator.AddCellPopulationBoundaryCondition(boundaryCondition);
     
+        //---------------------------------------------------------------------------
+
+
     
-        //----------------------------Other Modifiers------------------------------ 
+        // 8) Cell volume tracking, required to apply contact inhibition-------------
+
         MAKE_PTR(VolumeTrackingModifier<3>, volumeTrackingForContactInhibition);
         simulator.AddSimulationModifier(volumeTrackingForContactInhibition);
-    
-    
-        //------------------------------Data output--------------------------------  
-        MAKE_PTR_ARGS(GonadArmDataOutput<3>, dataRecording, (GlobalParameterStruct::Instance()->GetParameter(36)) );
-        simulator.AddSimulationModifier(dataRecording);
-        //MAKE_PTR_ARGS(CellTrackingOutput<3>, positionRecording, (GlobalParameterStruct::Instance()->GetParameter(36),5) );
-        //simulator.AddSimulationModifier(positionRecording);
-    
-    
-        //------------------------------Cell killers-------------------------------         
-        double lengthOfSpermatheca = 20.0;
-        MAKE_PTR_ARGS(Fertilisation<3>, removalByFertilisation, (&cell_population, lengthOfSpermatheca));
-        simulator.AddCellKiller(removalByFertilisation);
-        MAKE_PTR_ARGS(RandomCellKillerByType<3>, removalByApoptosis, (&cell_population, GlobalParameterStruct::Instance()->GetParameter(21)));
-        simulator.AddCellKiller(removalByApoptosis);
-    
-    
-        //----------------------------------Run-------------------------------------  
-        simulator.Solve();
 
+        //---------------------------------------------------------------------------
+
+    
+    
+        // 9) Cell removal, by fertilization and apoptosis---------------------------
+
+        double lengthOfOvulationRegion = 20.0; //How close to the gonad's proximal end must a cell be before it can be removed
+        MAKE_PTR_ARGS(Fertilisation<3>, removalByFertilisation, (&cell_population, lengthOfOvulationRegion));
+        simulator.AddCellKiller(removalByFertilisation);
+        MAKE_PTR_ARGS(OocyteFatedCellApoptosis<3>, removalByApoptosis, (&cell_population, parameters->GetParameter(21))); // parameters[21] = cell death rate
+        simulator.AddCellKiller(removalByApoptosis);
+
+        //---------------------------------------------------------------------------
+
+    
+    
+        // 10) Add some data output--------------------------------------------------
+
+        MAKE_PTR_ARGS(GonadArmDataOutput<3>, dataRecording, (parameters->GetParameter(36))); // parameters[36] = timesteps per hour
+        simulator.AddSimulationModifier(dataRecording);
+        MAKE_PTR_ARGS(CellTrackingOutput<3>, positionRecording, (parameters->GetParameter(36), 1));
+        simulator.AddSimulationModifier(positionRecording);
+    
+        //----------------------------------------------------------------------------
+
+    
+
+        // 11) Run simulation and save the final state--------------------------------
+        
+        simulator.Solve();
         CellBasedSimulationArchiver<3, OffLatticeSimulation<3> >::Save(&simulator);
     
-        //----------------------------Garbage collection----------------------------  
+        //----------------------------------------------------------------------------
+
+
+
+        // 12) Delete nodes-----------------------------------------------------------
+        
         for (unsigned i = 0; i<nodes.size(); i++)
         {
             delete nodes[i];
-        }
-    
-    }
+        } 
 
+        //----------------------------------------------------------------------------
+    }
 };
 
 #endif /* TESTELEGANSGERMLINE_HPP_ */

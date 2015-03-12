@@ -1,6 +1,6 @@
 /*
 
-Copyright (c) 2005-2014, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -36,84 +36,70 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "GlobalParameterStruct.hpp"
 #include "Exception.hpp"
 
-//A pointer to the single parameter struct instance
+
+//A pointer to the single parameter struct instance. Initially null.
 GlobalParameterStruct* GlobalParameterStruct::mpInstance = NULL;
 
 
-//For initialising the parameters object from a config file the first time it is used.
-GlobalParameterStruct* GlobalParameterStruct::Instance(std::string filename, std::string parametersDirectory)
-{
-  if (mpInstance == NULL)
-  {
-    mpInstance = new GlobalParameterStruct(filename, parametersDirectory);
-    std::atexit(Destroy);
-    return mpInstance;
-  }
-  else{
-    EXCEPTION("A parameter struct has already been created. To retrieve parameters, call GlobalParameterStruct::Instance()->GetParameter(*int*)");
-  }
-}
-
-
-//For retrieving a parameter struct that has already been created 
+//For retrieving a pointer to the current GlobalParameterStruct struct 
 GlobalParameterStruct* GlobalParameterStruct::Instance()
 {
   if (mpInstance == NULL)
   {
-    EXCEPTION("Please specify a parameter file name when calling GlobalParameterStruct for the first time.");
+    mpInstance = new GlobalParameterStruct();
   }
-  else{
-    return mpInstance;
-  }
+  return mpInstance;
 }
 
 
-//Reads in parameter data from a config file located in the directory given below
-GlobalParameterStruct::GlobalParameterStruct(std::string filename, std::string parametersDirectory){
+//Protected constructor. Leaves directory and parameters vector blank for now
+GlobalParameterStruct::GlobalParameterStruct()
+{
+    Directory =  std::string();
+    Params = std::vector<double>();
+    assert(mpInstance == NULL); 
+}
 
+
+
+//Initialises the parameters vector and output directory from a config file.
+void GlobalParameterStruct::ConfigureFromFile(std::string filename, std::string parametersDirectory)
+{
+
+  //Open the file specified in the arguments
   std::string filepath;
   filepath.append(parametersDirectory);
   filepath.append(filename);
-  std::cout << filepath.c_str() << std::endl;
   std::ifstream CONFIG(filepath.c_str());
-
-  //read in line by line      
-  double param;
-  char temp[256];
-  
+    
+  double param;   // <- temp parameter storage
+  char temp[256]; // <- temp string buffer
   if (CONFIG.is_open())
   {
-    std::cout << "parameters file opened" << std::endl;
-    std::cout << "setting results directory name" << std::endl;
+    //If file opened fine, read it line by line  
+
+    //Set output directory
+    //std::cout << "Parameters file open" << std::endl;
+    //std::cout << "Setting output directory to ";
     CONFIG.getline(temp, 256);
     Directory = temp;
-    std::cout << Directory << std::endl;
+    //std::cout << Directory << std::endl;
 
     while (!CONFIG.getline(temp, 256, '\t').eof())
     {
+      //Get each param and ftor in Params vector.
       param = strtod(temp, 0);
-      std::cout << "reading parameter "<< Params.size() << "  "  << param << std::endl;
+      //std::cout << "Parameter " << Params.size() << " = " << param << std::endl;
       Params.push_back(param);  
       CONFIG.getline(temp, 256);
     }
-    std::cout << "parameters file closing" << std::endl;
     CONFIG.close();
+
   }else{
     EXCEPTION("Failed to open parameters file");
   }
 }
 
-
-//Resets the results directory name, can be useful for parameter sweeps
-void GlobalParameterStruct::ResetDirectoryName(std::string newName){
-  Directory = newName;
-}
-
-
-//Resets a single parameter value, can be useful in parameter sweeps
-void GlobalParameterStruct::ResetParameter(int index, double newValue){
-  Params[index] = newValue;
-};
 
 
 //Destroys the parameter struct object
@@ -129,11 +115,27 @@ void GlobalParameterStruct::Destroy()
 
 //Retreives a parameter value by index
 double GlobalParameterStruct::GetParameter(int index){
+  if(index > (int)Params.size()-1){
+    EXCEPTION("Parameter has yet to be initialised. Check that ConfigureFromFile was called and that you are using the correct input file.");
+  }
   return Params[index];
 }
 
 
-//Retreives results directory name
+//Retreives the results directory name
 std::string GlobalParameterStruct::GetDirectory(){
   return Directory;
 }
+
+
+//Resets the results directory name. Can be useful for parameter sweeps
+void GlobalParameterStruct::ResetDirectoryName(std::string newName){
+  Directory = newName;
+}
+
+
+//Resets a single parameter value. Can be useful in parameter sweeps
+void GlobalParameterStruct::ResetParameter(int index, double newValue){
+  Params[index] = newValue;
+};
+

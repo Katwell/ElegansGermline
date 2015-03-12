@@ -1,7 +1,6 @@
-
 /*
 
-Copyright (c) 2005-2013, University of Oxford.
+Copyright (c) 2005-2015, University of Oxford.
 All rights reserved.
 
 University of Oxford means the Chancellor, Masters and Scholars of the
@@ -34,26 +33,23 @@ OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifndef RandomCellKillerByType_HPP_
-#define RandomCellKillerByType_HPP_
+#ifndef OOCYTEFATEDCELLAPOPTOSIS_HPP_
+#define OOCYTEFATEDCELLAPOPTOSIS_HPP_
 
 #include "AbstractCellKiller.hpp"
 #include "RandomNumberGenerator.hpp"
-#include "GlobalParameterStruct.hpp"
 
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
-#include <iostream>
-#include <fstream>
-#include <sstream>
 
 /**
- * A cell killer that loops over all germ cells and for those fated to become oocytes that are NOT in the proximal arm,
- * kills with a certain per hour probability p. 
+ * A cell killer that loops over all germ cells and selects oocyte-fated cells < 250 microns from the DTC
+ * (i.e. oocyte-fated cells NOT yet in the proximal arm). These cells are then killed with a probability per
+ * hour of p. 
  */
 
 template<unsigned DIM>
-class RandomCellKillerByType : public AbstractCellKiller<DIM>
+class OocyteFatedCellApoptosis : public AbstractCellKiller<DIM>
 {
 private:
 
@@ -69,20 +65,34 @@ private:
     void serialize(Archive & archive, const unsigned int version)
     {
         archive & boost::serialization::base_object<AbstractCellKiller<DIM> >(*this);
+
+        // Make sure the random number generator is also archived
+        SerializableSingleton<RandomNumberGenerator>* p_rng_wrapper = RandomNumberGenerator::Instance()->GetSerializationWrapper();
+        archive & p_rng_wrapper;
     }
+
+
+    /*
+    * Probability of death for an oocyte-fated cell spending 1 hour outside the proliferative zone
+    */
+    double mHourlyProbabilityOfDeath;
 
 public:
 
-    double HourlyProbabilityOfDeath;
 
     /**
      * Constructor.
      *
      * @param pCellPopulation pointer to the cell population
-     * @param HourlyProbabilityOfDeath
+     * @param HourlyProbabilityOfDeath p(death) for each hour spent in target area
      */
-    RandomCellKillerByType(AbstractCellPopulation<DIM>* pCellPopulation, double HourlyProbabilityOfDeath);
-    ~RandomCellKillerByType();
+    OocyteFatedCellApoptosis(AbstractCellPopulation<DIM>* pCellPopulation, double HourlyProbabilityOfDeath);
+    
+
+    /*
+    * Destructor
+    */
+    ~OocyteFatedCellApoptosis();
 
 
     /**
@@ -100,9 +110,7 @@ public:
 
 
     /**
-     * Tests whether each cell should be killed
-     *
-     * @param pCell the cell to test for RandomCellKillerByType
+     * Loops over all cells and tests whether they should be killed
      */
     void CheckAndLabelCellsForApoptosisOrDeath();
 
@@ -113,10 +121,11 @@ public:
      * @param rParamsFile the file stream to which the parameters are output
      */
     void OutputCellKillerParameters(out_stream& rParamsFile);
+
 };
 
 #include "SerializationExportWrapper.hpp"
-EXPORT_TEMPLATE_CLASS_SAME_DIMS(RandomCellKillerByType)
+EXPORT_TEMPLATE_CLASS_SAME_DIMS(OocyteFatedCellApoptosis)
 
 
 namespace boost
@@ -124,37 +133,39 @@ namespace boost
 namespace serialization
 {
 /**
- * Serialize information required to construct a RandomCellKillerByType.
+ * Serialize information required to construct an OocyteFatedCellApoptosis instance.
  */
 
 template<class Archive, unsigned DIM>
 inline void save_construct_data(
-    Archive & ar, const RandomCellKillerByType<DIM> * t, const BOOST_PFTO unsigned int file_version)
+    Archive & ar, const OocyteFatedCellApoptosis<DIM> * t, const BOOST_PFTO unsigned int file_version)
 {
     // Save data required to construct instance
     const AbstractCellPopulation<DIM>* const p_cell_population = t->GetCellPopulation();
     ar << p_cell_population;
+
     double p = t->GetHourlyProbabilityOfDeath();
     ar << p;
 }
 
 /**
- * De-serialize constructor parameters and initialise a RandomCellKillerByType.
+ * De-serialize constructor parameters and initialise an OocyteFatedCellApoptosis.
  */
 template<class Archive, unsigned DIM>
 inline void load_construct_data(
-    Archive & ar, RandomCellKillerByType<DIM> * t, const unsigned int file_version)
+    Archive & ar, OocyteFatedCellApoptosis<DIM> * t, const unsigned int file_version)
 {
     // Retrieve data from archive required to construct new instance
     AbstractCellPopulation<DIM>* p_cell_population;
     ar >> p_cell_population;
+    
     double p;
     ar >> p;
 
     // Invoke inplace constructor to initialise instance
-    ::new(t)RandomCellKillerByType<DIM>(p_cell_population, p);
+    ::new(t)OocyteFatedCellApoptosis<DIM>(p_cell_population, p);
 }
 }
 } // namespace ...
 
-#endif /*RandomCellKillerByType_HPP_*/
+#endif /*OOCYTEFATEDCELLAPOPTOSIS_HPP_*/

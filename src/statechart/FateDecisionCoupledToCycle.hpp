@@ -1,5 +1,43 @@
-#ifndef FateDecisionCoupledToCycle_HPP_
-#define FateDecisionCoupledToCycle_HPP_
+/*
+
+Copyright (c) 2005-2015, University of Oxford.
+All rights reserved.
+
+University of Oxford means the Chancellor, Masters and Scholars of the
+University of Oxford, having an administrative office at Wellington
+Square, Oxford OX1 2JD, UK.
+
+This file is part of Chaste.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+* Neither the name of the University of Oxford nor the names of its
+contributors may be used to endorse or promote products derived from this
+software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
+#ifndef FATEDECISIONCOUPLEDTOCYCLE_HPP_
+#define FATEDECISIONCOUPLEDTOCYCLE_HPP_
+
+#include <StatechartCellCycleModel.hpp>
+#include <ElegansDevStatechartCellCycleModel.hpp>
 
 #include <boost/statechart/event.hpp>
 #include <boost/statechart/state_machine.hpp>
@@ -9,17 +47,16 @@
 #include <boost/statechart/transition.hpp>
 #include <boost/mpl/list.hpp>
 #include <boost/config.hpp>
+namespace sc = boost::statechart;
+namespace mpl = boost::mpl;
 
 #include "ChasteSerialization.hpp"
 #include <boost/serialization/base_object.hpp>
 #include <boost/serialization/vector.hpp>
-
 #include <bitset>
 
-namespace sc = boost::statechart;
-namespace mpl = boost::mpl;
 
-//Predeclare struct for each state
+//Predeclare a struct for each state
 struct Running;
 struct GLP1;
 struct GLP1_Unbound;
@@ -51,7 +88,7 @@ struct Differentiation_OocyteFated;
 struct Differentiation_Sperm;
 struct Differentiation_Oocyte;
 
-//Declare the update events
+//Declare an update event for each orthogonal region
 struct EvGLP1Update : sc::event< EvGLP1Update > {};
 struct EvLAG1Update : sc::event< EvLAG1Update > {};
 struct EvGLD1Update : sc::event< EvGLD1Update > {};
@@ -59,7 +96,7 @@ struct EvGLD2Update : sc::event< EvGLD2Update > {};
 struct EvCellCycleUpdate : sc::event< EvCellCycleUpdate > {};
 struct EvDifferentiationUpdate : sc::event< EvDifferentiationUpdate > {};
 
-//Declare goto events for each leaf state, to allow copying of a statechart state
+//Declare goto events for each leaf state, to allow copying of a statechart's state
 struct EvGoToGLP1_Unbound : sc::event< EvGoToGLP1_Unbound > {};
 struct EvGoToGLP1_Bound : sc::event< EvGoToGLP1_Bound > {};
 struct EvGoToGLP1_Absent : sc::event< EvGoToGLP1_Absent > {};
@@ -85,18 +122,18 @@ struct FateDecisionCoupledToCycle:  sc::state_machine<FateDecisionCoupledToCycle
   //Basic constructor
   FateDecisionCoupledToCycle();
   
-  //Dealing with the associated cell
+  //Deals with the associated cell
   CellPtr pCell;
   void SetCell(CellPtr newCell);
 
-  //Deals with copying the StateChart when a cell divides
-  boost::shared_ptr<FateDecisionCoupledToCycle> Copy(boost::shared_ptr<FateDecisionCoupledToCycle> myNewStatechart);
-  std::bitset<32> GetState();
+  //Deals with copying the Statechart when a cell divides
+  boost::shared_ptr<FateDecisionCoupledToCycle> CopyInto(boost::shared_ptr<FateDecisionCoupledToCycle> myNewStatechart);
+  std::bitset<MAX_STATE_COUNT> GetState();
   std::vector<double> GetVariables();
-  void SetState(std::bitset<32> state);
+  void SetState(std::bitset<MAX_STATE_COUNT> state);
   void SetVariables(std::vector<double> variableValues);
 
-  //Declare any state associated variables
+  //Declare any chart associated variables
   double TimeInPhase;
   double SpermatocyteDivisions;
   double SpermDevelopmentDelay;
@@ -110,7 +147,7 @@ struct Running:  sc::simple_state<Running,FateDecisionCoupledToCycle,mpl::list< 
 };
 
 
-//STATES
+//DEFINE STRUCTURE OF NON-LEAF STATES
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 struct GLP1: sc::state<GLP1,Running::orthogonal<0>,GLP1_Unbound>{
@@ -185,7 +222,6 @@ struct CellCycle: sc::state<CellCycle,Running::orthogonal<4>,CellCycle_Mitosis>{
   sc::result react( const EvGoToCellCycle_ExitedProlif_MeioticS & ){return transit<CellCycle_ExitedProlif_MeioticS>();};
   sc::result react( const EvGoToCellCycle_ExitedProlif_Meiosis & ){return transit<CellCycle_ExitedProlif_Meiosis>();};
 };
-
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 struct CellCycle_Mitosis: sc::state<CellCycle_Mitosis,CellCycle,CellCycle_Mitosis_G1>{
@@ -217,6 +253,7 @@ struct Differentiation: sc::state<Differentiation,Running::orthogonal<5>,Differe
 };
 
 
+//DEFINE STRUCTURE OF LEAF STATES
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 struct GLP1_Unbound: sc::state<GLP1_Unbound,GLP1 >{
@@ -250,7 +287,6 @@ struct LAG1_Inactive: sc::state<LAG1_Inactive,LAG1 >{
   typedef mpl::list< sc::custom_reaction< EvLAG1Update > > reactions;
   sc::result react( const EvLAG1Update & );
 };
-
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 struct LAG1_Active: sc::state<LAG1_Active,LAG1 >{
@@ -267,7 +303,6 @@ struct GLD1_Inactive: sc::state<GLD1_Inactive,GLD1 >{
   typedef mpl::list< sc::custom_reaction< EvGLD1Update > > reactions;
   sc::result react( const EvGLD1Update & );
 };
-
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 struct GLD1_Active: sc::state<GLD1_Active,GLD1 >{
@@ -393,9 +428,11 @@ struct Differentiation_Oocyte: sc::state<Differentiation_Oocyte,Differentiation 
   sc::result react( const EvDifferentiationUpdate & );
 };
 
-#include "SerializationExportWrapper.hpp"
-// Declare identifier for the serializer
-EXPORT_TEMPLATE_CLASS1(StatechartCellCycleModel, FateDecisionCoupledToCycle)
 
+// Export StatechartCellCycleModel and ElegansDevStatechartCellCycleModel with this class
+// as template parameter
+#include "SerializationExportWrapper.hpp"
+EXPORT_TEMPLATE_CLASS1(StatechartCellCycleModel, FateDecisionCoupledToCycle)
+EXPORT_TEMPLATE_CLASS1(ElegansDevStatechartCellCycleModel, FateDecisionCoupledToCycle)
 
 #endif
