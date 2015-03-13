@@ -70,6 +70,19 @@ public:
 
 	ElegansDevStatechartCellCycleModel(bool LoadingFromArchive = false, bool SynchronisedCells = false):
 	   StatechartCellCycleModel< CELLSTATECHART >(LoadingFromArchive, SynchronisedCells){
+
+        this->SetG1Duration( GlobalParameterStruct::Instance()->GetParameter(16)*
+                             GlobalParameterStruct::Instance()->GetParameter(14) );
+        this->SetTransitCellG1Duration( GlobalParameterStruct::Instance()->GetParameter(16)*
+                                        GlobalParameterStruct::Instance()->GetParameter(14) );
+        this->SetStemCellG1Duration( GlobalParameterStruct::Instance()->GetParameter(16)*
+                                     GlobalParameterStruct::Instance()->GetParameter(14) );
+        this->SetSDuration( GlobalParameterStruct::Instance()->GetParameter(17)*
+                            GlobalParameterStruct::Instance()->GetParameter(14) );
+        this->SetG2Duration( GlobalParameterStruct::Instance()->GetParameter(18)*
+                             GlobalParameterStruct::Instance()->GetParameter(14) );
+        this->SetMDuration( GlobalParameterStruct::Instance()->GetParameter(19)*
+                            GlobalParameterStruct::Instance()->GetParameter(14) );
 	}
 
     ~ElegansDevStatechartCellCycleModel(){};
@@ -111,22 +124,6 @@ public:
     */
     virtual void Initialise(){
 
-        //THIS is the main point. Set cell cycle phases from parameter values, erasing the default 
-        //values that are appropriate for the colonic crypt NOT c elegans.
-        //Rest is same as the parent class StatechartCellCycleModel
-        this->SetG1Duration( GlobalParameterStruct::Instance()->GetParameter(16)*
-                             GlobalParameterStruct::Instance()->GetParameter(14) );
-        this->SetTransitCellG1Duration( GlobalParameterStruct::Instance()->GetParameter(16)*
-                                        GlobalParameterStruct::Instance()->GetParameter(14) );
-        this->SetStemCellG1Duration( GlobalParameterStruct::Instance()->GetParameter(16)*
-                                     GlobalParameterStruct::Instance()->GetParameter(14) );
-        this->SetSDuration( GlobalParameterStruct::Instance()->GetParameter(17)*
-                            GlobalParameterStruct::Instance()->GetParameter(14) );
-        this->SetG2Duration( GlobalParameterStruct::Instance()->GetParameter(18)*
-                             GlobalParameterStruct::Instance()->GetParameter(14) );
-        this->SetMDuration( GlobalParameterStruct::Instance()->GetParameter(19)*
-                            GlobalParameterStruct::Instance()->GetParameter(14) );
-        
         //Initiate can only be called AFTER the cell pointer has been set.
         StatechartCellCycleModel<CELLSTATECHART>::pStatechart->initiate();
     

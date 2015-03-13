@@ -101,6 +101,7 @@ This project contains the following source code files:
 - _src/force_law/RepulsionForceSizeCorrected.hpp(cpp)_
 - _src/statechart/AbstractStatechartCellCycleModel.hpp_
 - _src/statechart/StatechartCellCycleModel.hpp_
+- _src/statechart/ElegansDevStatechartCellCycleModel.hpp_
 - _src/statechart/StatechartInterface.hpp_
 - _src/statechart/FateDecisionCoupledToCycle.hpp(cpp)_
 - _src/statechart/FateUpcoupledFromCycle.hpp(cpp)_
