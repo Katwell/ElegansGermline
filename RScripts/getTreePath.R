@@ -7,9 +7,9 @@
 getTreeOfPaths = function(startingCellID, startTime, endTime){
 
 	# USER INPUT. Set the path to the directory containing your results folders:
-	resultsDirectory = "../ExampleOutput/"
+	resultsDirectory = "../exampleOutput/"
 	# USER INPUT. Name of the results folder you want to read from:
-	baseFileName = "BaselineFinal1"
+	baseFileName = "ForTracking"
 	
 	#READ IN A FILE TrackingData.txt CONTAINING CELL POSITION INFO
 	pathDataFull<-read.table(paste(resultsDirectory, baseFileName, "/TrackingData.txt",sep=""),as.is=TRUE,header=FALSE,sep="\t");
