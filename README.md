@@ -117,4 +117,4 @@ A full description of each is given in the docs, in the file _SourceCodeDetails_
 - _RScripts/GetTreePath.R_
 
 ## Reproducing our results
-If all goes to plan, a paper concerning this germ line model will soon be published (watch this space for the link). Instructions for reproducing the specific figures in that paper are provided in the docs, in the file _FigureInstructions_.
+A paper concerning this germline model has now been published (http://dev.biologists.org/content/142/22/3902.long). Instructions for reproducing the specific figures in that paper are provided in the docs, in the file _FigureInstructions_.
